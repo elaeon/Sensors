@@ -6,7 +6,7 @@ import time
 import socket
 import logging
 
-from queuelib.queue import FifoSQLiteQueue
+from queuelib import FifoDiskQueue
 
 #os.system('modprobe w1-gpio')
 #os.system('modprobe w1-therm')
@@ -70,18 +70,6 @@ def send_blocks_msg(messages):
         return True
     finally:
         sock.close()
-
-def read_temp():
-   lines = read_temp_raw()
-   while lines[0].strip()[-3:] != 'YES':
-      time.sleep(DELAY_ERROR_SENSOR)
-      lines = read_temp_raw()
-   equals_pos = lines[1].find('t=')
-   if equals_pos != -1:
-      temp_string = lines[1][equals_pos+2:]
-      temp_c = float(temp_string) / 1000.0
-      return temp_c
-
 
 def prepare_to_send_msg(message):
     if send_msg(message):
