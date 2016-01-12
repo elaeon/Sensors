@@ -1,22 +1,33 @@
 import time
-import os
-from queuelib.queue import FifoSQLiteQueue
+import Adafruit_DHT
+import platform
 
-def get_temperature():
-    import random
-    return random.random() * 10
+from queuelib import FifoDiskQueue
 
-def messages(size):
+RETRIES = 5
+DELAY_ERROR_SENSOR = .1
+
+def get_humidity_temperature():
+    humidity, temperature = Adafruit_DHT.read_retry(
+        Adafruit_DHT.AM2302, '17', retries=RETRIES, delay_seconds=DELAY_ERROR_SENSOR)
+
+    return humidity, temperature
+
+def messages(node, size):
     i = 0
     while i < size:
-        timestamp = time.strftime("%Y-%M-%d-%H:%M:%S")
-        yield "'system.{}.temperature_A {} {}'".format("test", get_temperature(), timestamp)
+        h, t = get_humidity_temperature()
+        if h is None or t is None:
+            continue
+        timestamp = int(time.time())
+        yield "'system.{}.temperature_A {} {}'".format("test", t, timestamp)
         i += 1
 
 if __name__ == '__main__':
+    node = platform.node().replace('.', '-')
     while True:
-        queue = FifoSQLiteQueue("/tmp/my_program.fifo.sql")
-        for message in messages(10):
+        queue = FifoDiskQueue("temperature.fifo.sql")
+        for message in messages(node, 10):
             queue.push(message)
             time.sleep(1)
         queue.close()
