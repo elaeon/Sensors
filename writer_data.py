@@ -20,7 +20,8 @@ def messages(node, size):
         if h is None or t is None:
             continue
         timestamp = int(time.time())
-        yield "'system.{}.temperature_A {} {}'".format("test", t, timestamp)
+        yield "system.{}.temperature_A {} {}\n".format(node, t, timestamp)
+        yield "system.{}.humidity_A {} {}\n".format(node, h, timestamp)
         i += 1
 
 if __name__ == '__main__':
