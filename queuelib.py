@@ -31,8 +31,8 @@ class FifoDiskQueue(object):
                 return item
 
     def close(self):
-        if len(self) == 0:
-            os.remove(self._path)
+        #if len(self) == 0:
+        #    os.remove(self._path)
         self._db.close()
 
     def __len__(self):
@@ -40,7 +40,7 @@ class FifoDiskQueue(object):
             return next(conn.execute(self._size))[0]
 
 
-class LifoDiskQueue(FifoSQLiteQueue):
+class LifoDiskQueue(FifoDiskQueue):
     _create = (
         'CREATE TABLE IF NOT EXISTS lifoqueue '
         '(id INTEGER PRIMARY KEY AUTOINCREMENT, item BLOB)'
