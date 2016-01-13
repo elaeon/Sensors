@@ -11,10 +11,10 @@ class WriterData(object):
     def msg_format(self, message):
         if len(message) == 2:
             v, timestamp = message
-            return "system.{}.{} {} {}\n".format(self.node, self.sensor_name, v, timestamp)
+            name = self.sensor_name
         elif len(message) == 3:
             v, timestamp, name = message
-            return "system.{}.{} {} {}\n".format(self.node, name, v, timestamp)
+        return "system.{}.{} {} {}\n".format(self.node, name, v, timestamp)
 
     def run(self, num_messages_second, messages_fn, sleep=1):
         while True:
