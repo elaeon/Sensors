@@ -8,19 +8,11 @@ import logging
 
 from queuelib import FifoDiskQueue
 
-#os.system('modprobe w1-gpio')
-#os.system('modprobe w1-therm')
-
-#base_dir = '/sys/bus/w1/devices/'
-#device_folder = glob.glob(base_dir+"28*")[0]
-#device_folder = base_dir + "28-0115524406ff"
-#device_file = device_folder + '/w1_slave'
-
 DELAY = 1
 DELAY_ERROR_SENSOR = 0.2
 DELAY_ERROR_CONNECTION = 2
-CARBON_SERVER = 'localhost' #'192.168.52.50'
-CARBON_PORT = 8080 #2003
+CARBON_SERVER = '192.168.52.50'
+CARBON_PORT = 2003
 
 
 def logging_setup():
@@ -80,7 +72,7 @@ def prepare_to_send_msg(message):
 
 if __name__ == '__main__':
     while True:
-        queue = FifoSQLiteQueue("/tmp/my_program.fifo.sql")
+        queue = FifoDiskQueue("temperature.fifo.sql")
         print(len(queue))
         message = queue.pop()
         while len(queue) >= 20:
