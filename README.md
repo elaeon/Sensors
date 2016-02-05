@@ -1,17 +1,17 @@
 # sensors
 Example
 temperature_sync.py
-{{{
+```python
 #!/usr/bin/python2.7
 from sensor_sync import SyncData
 
 if __name__ == '__main__':
     sync_data = SyncData("temperature_low_one", ip_adress)
     sync_data.run()
-}}}
+```
 
 temperature_writer.py
-{{{
+```python
 #!/usr/bin/python2.7
 import os
 import glob
@@ -78,4 +78,4 @@ def get_humidity_temperature():
 if __name__ == '__main__':
     sensor_writer = WriterData("temperature_low_one")
     sensor_writer.run(10, messages_fn)
-}}}
+```
