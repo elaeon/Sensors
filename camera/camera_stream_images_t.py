@@ -5,7 +5,9 @@ import time
 import picamera
 import threading
 
+THREADS = 4
 while True:
+    print("Waiting for connection")
     server_socket = socket.socket()
     server_socket.bind(('0.0.0.0', 8000))
     server_socket.listen(0)
@@ -75,7 +77,7 @@ while True:
 
 
         with picamera.PiCamera() as camera:
-            pool = [ImageStreamer() for i in range(4)]
+            pool = [ImageStreamer() for i in range(THREADS)]
             camera.resolution = (640, 480)
             camera.framerate = 30
             camera.rotation = 180
