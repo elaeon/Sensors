@@ -7,7 +7,7 @@ import dlib
 from skimage import io as sio
 
 client_socket = socket.socket()
-client_socket.connect(('192.168.52.101', 8000))
+client_socket.connect(('192.168.52.100', 8000))
 connection = client_socket.makefile('rb')
 
 
@@ -24,32 +24,34 @@ def read():
             # data from the connection
             image_stream = io.BytesIO()
             image_stream.write(connection.read(image_len))
+            # Rewind the stream, open it as an image with PIL and do some
+            # processing on it
+            #image_stream.seek(0)
             image = Image.open(image_stream)
+            #print('Image is %dx%d' % image.size)
+            #print('%s %s' % (image.format, image.mode))
             image.verify()
+            #print('Image is verified')
             image = sio.imread(image_stream)
+            #image = Image.open(image_stream)
             yield image
     finally:
         connection.close()
         client_socket.close()
-
+        
 def draw():
-    #import pylab as pl
-    #import matplotlib.image as mpl_image
-
     win = dlib.image_window()
-
-    #img = None
+    start = time.time()
+    operation = 0
     for im in read():
-        #if img is None:
-        #    img = pl.imshow(im)
-        #else:
-        #    img.set_data(im)
-        #pl.pause(.01)
-        #pl.draw()
         win.clear_overlay()
         win.set_image(im)
-    #win.add_overlay(dets)
-
+        if time.time() - start <= 1:
+            operation += 1
+        else:
+            print("{} fps".format(operation))
+            operation = 0
+            start = time.time()
 
 def detect_face():
     detector = dlib.get_frontal_face_detector()
@@ -62,7 +64,7 @@ def detect_face():
         win.add_overlay(dets)
         for i, d in enumerate(dets):
             print("Detection {}: Left: {} Top: {} Right: {} Bottom: {}".format(
-            i, d.left(), d.top(), d.right(), d.bottom()))
+                i, d.left(), d.top(), d.right(), d.bottom()))
 
         if len(dets) > 0:
             print("Number of faces detected: {}".format(len(dets)))
@@ -73,5 +75,5 @@ def detect_face():
                     d, scores[i], idx[i]))
 
 if __name__  == '__main__':
-    detect_face()
-    #draw()
+    #detect_face()
+    draw()
