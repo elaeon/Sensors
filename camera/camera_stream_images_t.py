@@ -12,9 +12,11 @@ while True:
         server_socket = socket.socket()
         server_socket.bind(('0.0.0.0', 8000))
         server_socket.listen(0)
-        connection = server_socket.accept()[0].makefile('wb')
-
-        print("Conection accepted")
+        
+        conn, addr = server_socket.accept()
+        num_images = int(conn.recv(20))
+        connection = conn.makefile('wb')
+        print("Conection accepted, {}".format(addr))
         
         connection_lock = threading.Lock()
         pool_lock = threading.Lock()
