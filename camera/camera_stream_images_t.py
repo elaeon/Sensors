@@ -7,15 +7,15 @@ import threading
 
 THREADS = 4
 while True:
-    print("Waiting for connection")
-    server_socket = socket.socket()
-    server_socket.bind(('0.0.0.0', 8000))
-    server_socket.listen(0)
-    connection = server_socket.accept()[0].makefile('wb')
-
-    print("Conection accepted")
-
     try:
+        print("Waiting for connection")
+        server_socket = socket.socket()
+        server_socket.bind(('0.0.0.0', 8000))
+        server_socket.listen(0)
+        connection = server_socket.accept()[0].makefile('wb')
+
+        print("Conection accepted")
+        
         connection_lock = threading.Lock()
         pool_lock = threading.Lock()
         pool = []
@@ -96,9 +96,9 @@ while True:
             connection.write(struct.pack('<L', 0))
 
         connection.close()
-        server_socket.close()
     except socket.error:
         print("Error, connection close abnormaly...")
         time.sleep(1)
     finally:
+        server_socket.close()
         print("Close conections...")
