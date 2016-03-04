@@ -4,26 +4,25 @@ import struct
 import time
 import picamera
 
+#def take_picture():
 while True:
     try:
+        server_socket = socket.socket()
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket.bind(('0.0.0.0', 8000))
+        server_socket.listen(0)
+        conn, addr = server_socket.accept()
+        num_images = int(conn.recv(20))
+        connection = conn.makefile('wb')
+        print("Conection accepted, {}".format(addr))
         with picamera.PiCamera() as camera:
             camera.resolution = (640, 480)
             camera.framerate = 30
             camera.rotation = 180
-
-            server_socket = socket.socket()
-            server_socket.bind(('0.0.0.0', 8000))
-            server_socket.listen(0)
-
-            connection = server_socket.accept()[0].makefile('wb')
-
             print("Starting warming")
             time.sleep(1)
-
             stream = io.BytesIO()
-            for foo in camera.capture_continuous(stream, 'jpeg', use_video_port=True):
-                # Write the length of the capture to the stream and flush to
-                # ensure it actually gets sent
+            for i, foo in enumerate(camera.capture_continuous(stream, 'jpeg', use_video_port=True)):
                 connection.write(struct.pack('<L', stream.tell()))
                 connection.flush()
                 # Rewind the stream and send the image data over the wire
@@ -32,12 +31,16 @@ while True:
                 # Reset the stream for the next capture
                 stream.seek(0)
                 stream.truncate()
+                if i == num_images:
+                    break
         # Write a length of zero to the stream to signal we're done
         connection.write(struct.pack('<L', 0))
         connection.close()
     except socket.error:
-        print("Close conection")
-        time.sleep(1)
+        print("Error, connection close abnormaly...")
     finally:
-        #connection.close()
         server_socket.close()
+        print("Close conections...")
+
+#if __name__ == '__main__':
+#    take_picture()
