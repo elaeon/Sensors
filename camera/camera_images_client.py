@@ -6,6 +6,8 @@ import time
 import dlib
 from skimage import io as sio
 
+import argparse
+
 
 # Accept a single connection and make a file-like object out of it
 def read(num_images=5):
@@ -47,26 +49,60 @@ def draw():
             operation = 0
             start = time.time()
 
-def detect_face():
+def get_faces():
     detector = dlib.get_frontal_face_detector()
     win = dlib.image_window()
-
-    for image in read():
-        #dets = detector(image, 1)
+    images = []
+    for image in read(num_images=20):
         dets, scores, idx = detector.run(image, 1)
         win.clear_overlay()
         win.set_image(image)
         win.add_overlay(dets)
         if len(dets) > 0:
-            print("Number of faces detected: {}".format(len(dets)))
             for i, d in enumerate(dets):
-                print("Detection {}: Left: {} Top: {} Right: {} Bottom: {}".format(
-                    i, d.left(), d.top(), d.right(), d.bottom()))
-                print("Detection {}, score: {}, face_type:{}".format(
-                    d, scores[i], idx[i]))
+                images.append((scores[i], image, d, idx[i]))
 
-    dlib.hit_enter_to_continue()
+    images.sort(reverse=True)
+    return images
+
+def process_face(url, number_id):
+    from face_training import BasicFaceClassif
+
+    images = get_faces()
+    if len(images) > 0:
+        face_classif = BasicFaceClassif()
+        images = images[:3] + images[:-1]
+        for i, image in enumerate(face_classif.process_images(images)):
+            sio.imsave(url+"face-{}-{}.png".format(number_id, i), image)
+
+def detect_face():
+    from face_training import SVCFace
+
+    images = get_faces()
+    if len(images) > 0:
+        face_classif = SVCFace(model="basic")
+        print(face_classif.predict(images[:5]))
+
+def detect_face_set():
+    import os
+    from face_training import SVCFace
+
+    images = os.listdir("/home/sc/Pictures/test/")
+    face_classif = SVCFace(model="basic")
+    for image_index, image in enumerate(images):
+        image_file = os.path.join("/home/sc/Pictures/test/", image)
+        image_data = sio.imread(image_file)
+        print(face_classif.predict_set(image_data), image)
 
 if __name__  == '__main__':
-    detect_face()
-    #draw()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--empleado", help="numero de empleado", type=int)
+    parser.add_argument("--foto", help="numero de empleado", action="store_true")
+    parser.add_argument("--set", help="numero de empleado", action="store_true")
+    args = parser.parse_args()
+    if args.empleado:
+        process_face("/home/sc/Pictures/face/", args.empleado)
+    elif args.foto:
+        detect_face()
+    elif args.set:
+        detect_face_set()
