@@ -6,10 +6,12 @@ import picamera
 import threading
 
 THREADS = 4
+#COUNTER = 0
 while True:
     try:
         print("Waiting for connection")
         server_socket = socket.socket()
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_socket.bind(('0.0.0.0', 8000))
         server_socket.listen(0)
         
@@ -33,6 +35,7 @@ while True:
 
             def run(self):
                 # This method runs in a background thread
+                #global COUNTER
                 while not self.terminated:
                     # Wait for the image to be written to the stream
                     if self.event.wait(1):
@@ -42,6 +45,10 @@ while True:
                                 connection.flush()
                                 self.stream.seek(0)
                                 connection.write(self.stream.read())
+                                #COUNTER += 1
+                            #if COUNTER >= num_images:
+                            #    self.terminated = True
+                            #    self.close_abruptly = True
                         except socket.error, AttributeError:
                             print("Error, connection close abnormaly")
                             self.terminated = True
