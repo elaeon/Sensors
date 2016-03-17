@@ -85,13 +85,15 @@ def detect_face():
 
 def detect_face_set():
     import os
-    from face_training import SVCFace
+    from face_training import SVCFace, TensorFace
 
     images = os.listdir("/home/sc/Pictures/test/")
-    face_classif = SVCFace(model="basic")
+    #face_classif = SVCFace(model="basic")
+    face_classif = TensorFace()
     for image_index, image in enumerate(images):
         image_file = os.path.join("/home/sc/Pictures/test/", image)
         image_data = sio.imread(image_file)
+        #print(face_classif.predict_set(image_data), image)
         print(face_classif.predict_set(image_data), image)
 
 if __name__  == '__main__':
