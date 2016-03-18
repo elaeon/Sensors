@@ -47,8 +47,12 @@ class BasicFaceClassif(object):
         shuffled_labels = labels[permutation]
         return shuffled_dataset, shuffled_labels
 
-    def train(self):
+    def fit(self):
         pass
+
+    def reformat(self, dataset, labels):
+        dataset = dataset.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
+        return dataset, labels
 
     def set_dataset(self, valid_size_p=.1, train_size_p=.6):
         dataset, labels = self.load_images()
@@ -63,12 +67,14 @@ class BasicFaceClassif(object):
         self.train_labels = self.train_labels[valid_size:v_t_size]
         self.test_dataset, self.test_labels = self.randomize(
             dataset[v_t_size:total_size], labels[v_t_size:total_size])
+        self.train_dataset, self.train_labels = self.reformat(self.train_dataset, self.train_labels)
+        self.valid_dataset, self.valid_labels = self.reformat(self.valid_dataset, self.valid_labels)
+        self.test_dataset, self.test_labels = self.reformat(self.test_dataset, self.test_labels)
         print("Test set: {}, Valid set: {}, Training set: {}".format(
             self.test_labels.shape[0], self.valid_labels.shape[0], self.train_labels.shape[0]))
 
     def run(self):
-        self.set_dataset()
-        score = self.train(
+        score = self.fit(
             self.train_dataset, self.train_labels, self.test_dataset, 
             self.test_labels, self.valid_dataset, self.valid_labels)
         print("Score: {}%".format((score * 100)))
@@ -104,58 +110,57 @@ class BasicFaceClassif(object):
         return self.model.predict(img)
 
 class SVCFace(BasicFaceClassif):
-    def train(self, train_dataset, train_labels, test_dataset, test_labels):
+    def __init__(self, model=None):
+        super(SVCFace, self).__init__(model=model)
+        self.set_dataset()
+
+    def fit(self, train_dataset, train_labels, test_dataset, test_labels):
         from sklearn.linear_model import LogisticRegression
         from sklearn import svm
-        train = train_dataset.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
+
         reg = LogisticRegression(penalty='l2')
         #reg = svm.SVC(kernel='rbf')
         #reg = svm.LinearSVC(C=1.0, max_iter=1000)
-        reg = reg.fit(train, train_labels)
+        reg = reg.fit(train_dataset, train_labels)
 
-        test = test_dataset.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
-        score = reg.score(test, test_labels)
+        score = reg.score(test_dataset, test_labels)
         self.model = reg
         return score
 
 class TensorFace(BasicFaceClassif):
+    def __init__(self):
+        super(TensorFace, self).__init__()
+        self.labels_d = dict(enumerate(["106", "110", "155"]))
+        self.labels_i = {v: k for k, v in self.labels_d.items()}
+        self.set_dataset()
+
     def reformat(self, dataset, labels):
         dataset = dataset.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
         #155 -> [0, 0, 1.0]
         #106 -> [1.0, 0, 0]
         #110 -> [0, 1.0, 0]
-        labels_m = np.ndarray(shape=(labels.shape[0], 3), dtype=np.float32)
-        for i, label in enumerate(labels):
-            l = np.ndarray(shape=(3), dtype=np.float32)
-            if label == 155:
-                l[0] = 0.
-                l[1] = 0.
-                l[2] = 1.
-            elif label == 106:
-                l[0] = 0.
-                l[1] = 1.
-                l[2] = 0.
-            else:
-                l[0] = 1.
-                l[1] = 0.
-                l[2] = 0.
-            labels_m[i] = l
-        #labels = labels.astype(np.float32)
-        #print(labels_m)
+        new_labels = np.asarray([self.labels_i[str(int(label))] for label in labels])
+        labels_m = (np.arange(len(self.labels_d)) == new_labels[:,None]).astype(np.float32)
         return dataset, labels_m
 
-    def train(self, train_dataset, train_labels, test_dataset, test_labels, valid_dataset, valid_labels):
-        self.train_dataset, self.train_labels = self.reformat(train_dataset, train_labels)
-        self.valid_dataset, self.valid_labels = self.reformat(valid_dataset, valid_labels)
-        self.test_dataset, self.test_labels = self.reformat(test_dataset, test_labels)
-        graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction = self.fit()
-        return self.__train(graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction)
+    def position_index(self, label):
+        for i, e in enumerate(label):
+            if e == 1:
+                return i
 
-    def __train(self, graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction):
+    def convert_label(self, label):
+        #[0, 0, 1.0] -> 155
+        return self.labels_d[self.position_index(label)]
+
+    def fit(self, train_dataset, train_labels, test_dataset, test_labels, valid_dataset, valid_labels):
+        graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction = self.prepare_graph()
+        return self.train(graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction)
+
+    def train(self, graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction):
         import tensorflow as tf
         num_steps = 2001
         img = None
-        num_labels = 3
+        num_labels = len(self.labels_d)
         batch_size = 10
         with tf.Session(graph=graph) as session:
             saver = tf.train.Saver()
@@ -196,15 +201,16 @@ class TensorFace(BasicFaceClassif):
             else:
                 print("...no checkpoint found...")
 
-            feed_dict = {tf_dataset: [img]}
+            feed_dict = {tf_dataset: img}
             classification = session.run(prediction, feed_dict=feed_dict)
-            print(classification)
+            return self.convert_label(classification[0])
 
     # batch_size has to be less than the len of training set label
-    def fit(self, batch_size=10, num_labels=3):
+    def prepare_graph(self, batch_size=10):
         import tensorflow as tf
         # With gradient descent training, even this much data is prohibitive.
-        # Subset the training data for faster turnaround. 
+        # Subset the training data for faster turnaround.
+        num_labels = len(self.labels_d) 
         graph = tf.Graph()
         with graph.as_default():
             # Input data. For the training data, we use a placeholder that will be fed
@@ -244,16 +250,19 @@ class TensorFace(BasicFaceClassif):
                 tf.matmul(tf_valid_dataset, weights) + biases)
             test_prediction = tf.nn.softmax(tf.matmul(tf_test_dataset, weights) + biases)
 
-        return graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction, tf_test_dataset
+        return graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction
 
     def predict_set(self, img):
-        self.set_dataset()
-        self.train_dataset, self.train_labels = self.reformat(self.train_dataset, self.train_labels)
-        self.valid_dataset, self.valid_labels = self.reformat(self.valid_dataset, self.valid_labels)
-        self.test_dataset, self.test_labels = self.reformat(self.test_dataset, self.test_labels)
-        graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction, tf_test_dataset = self.fit(batch_size=1)
-        self.predict(graph, img, tf_train_dataset, train_prediction)
+        graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction = self.prepare_graph(batch_size=1)
+        return self.predict(graph, img, tf_train_dataset, train_prediction)
         
+    def predict_v(self, images):
+        img = list(self.process_images(images))[0]
+        graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction = self.prepare_graph(batch_size=1)
+        #sio.imsave("/home/sc/Pictures/face-155-X.png", img)
+        #img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
+        return self.predict(graph, img, tf_train_dataset, train_prediction)
+
     def accuracy(self, predictions, labels):
         return (np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
               / predictions.shape[0])

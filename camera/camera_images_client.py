@@ -76,12 +76,13 @@ def process_face(url, number_id):
             sio.imsave(url+"face-{}-{}.png".format(number_id, i), image)
 
 def detect_face():
-    from face_training import SVCFace
+    from face_training import SVCFace, TensorFace
 
     images = get_faces()
     if len(images) > 0:
-        face_classif = SVCFace(model="basic")
-        print(face_classif.predict(images[:5]))
+        #face_classif = SVCFace(model="basic")
+        face_classif = TensorFace()
+        print(face_classif.predict_v(images[:5]))
 
 def detect_face_set():
     import os
@@ -93,7 +94,6 @@ def detect_face_set():
     for image_index, image in enumerate(images):
         image_file = os.path.join("/home/sc/Pictures/test/", image)
         image_data = sio.imread(image_file)
-        #print(face_classif.predict_set(image_data), image)
         print(face_classif.predict_set(image_data), image)
 
 if __name__  == '__main__':
