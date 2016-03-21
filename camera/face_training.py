@@ -47,7 +47,7 @@ class BasicFaceClassif(object):
         shuffled_labels = labels[permutation]
         return shuffled_dataset, shuffled_labels
 
-    def fit(self):
+    def train(self):
         pass
 
     def reformat(self, dataset, labels):
@@ -74,7 +74,7 @@ class BasicFaceClassif(object):
             self.test_labels.shape[0], self.valid_labels.shape[0], self.train_labels.shape[0]))
 
     def run(self):
-        score = self.fit(
+        score = self.train(
             self.train_dataset, self.train_labels, self.test_dataset, 
             self.test_labels, self.valid_dataset, self.valid_labels)
         print("Score: {}%".format((score * 100)))
@@ -114,7 +114,7 @@ class SVCFace(BasicFaceClassif):
         super(SVCFace, self).__init__(model=model)
         self.set_dataset()
 
-    def fit(self, train_dataset, train_labels, test_dataset, test_labels):
+    def train(self, train_dataset, train_labels, test_dataset, test_labels, valid_dataset, valid_labels):
         from sklearn.linear_model import LogisticRegression
         from sklearn import svm
 
@@ -143,129 +143,25 @@ class TensorFace(BasicFaceClassif):
         labels_m = (np.arange(len(self.labels_d)) == new_labels[:,None]).astype(np.float32)
         return dataset, labels_m
 
-    def position_index(self, label):
-        for i, e in enumerate(label):
-            if e == 1:
-                return i
-
-    def convert_label(self, label):
-        #[0, 0, 1.0] -> 155
-        return self.labels_d[self.position_index(label)]
-
-    def fit(self, train_dataset, train_labels, test_dataset, test_labels, valid_dataset, valid_labels):
-        graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction = self.prepare_graph()
-        return self.train(graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction)
-
-    def train(self, graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction):
-        import tensorflow as tf
-        num_steps = 2001
-        img = None
-        num_labels = len(self.labels_d)
-        batch_size = 10
-        with tf.Session(graph=graph) as session:
-            saver = tf.train.Saver()
-            tf.initialize_all_variables().run()
-            print("Initialized")
-            for step in xrange(num_steps):
-                # Pick an offset within the training data, which has been randomized.
-                # Note: we could use better randomization across epochs.
-                offset = (step * batch_size) % (self.train_labels.shape[0] - batch_size)
-                # Generate a minibatch.
-                batch_data = self.train_dataset[offset:(offset + batch_size), :]
-                batch_labels = self.train_labels[offset:(offset + batch_size), :]
-                # Prepare a dictionary telling the session where to feed the minibatch.
-                # The key of the dictionary is the placeholder node of the graph to be fed,
-                # and the value is the numpy array to feed to it.
-                feed_dict = {tf_train_dataset : batch_data, tf_train_labels : batch_labels}
-                _, l, predictions = session.run(
-                  [optimizer, loss, train_prediction], feed_dict=feed_dict)
-                if (step % 500 == 0):
-                    print("Minibatch loss at step", step, ":", l)
-                    print("Minibatch accuracy: %.1f" % self.accuracy(predictions, batch_labels))
-                    print("Validation accuracy: %.1f" % self.accuracy(
-                        valid_prediction.eval(), self.valid_labels))
-            score = self.accuracy(test_prediction.eval(), self.test_labels)
-            print('Test accuracy: %.1f' % score)
-            saver.save(session, 'model.ckpt', global_step=step)
-            return score
-
-    def predict(self, graph, img, tf_dataset, prediction):
-        import tensorflow as tf
-        with tf.Session(graph=graph) as session:
-            saver = tf.train.Saver()
-            img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
-            ckpt = tf.train.get_checkpoint_state("/home/sc/git/sensors/camera/")
-            #print(ckpt.model_checkpoint_path)
-            if ckpt and ckpt.model_checkpoint_path:
-                saver.restore(session, ckpt.model_checkpoint_path)
-            else:
-                print("...no checkpoint found...")
-
-            feed_dict = {tf_dataset: img}
-            classification = session.run(prediction, feed_dict=feed_dict)
-            return self.convert_label(classification[0])
-
-    # batch_size has to be less than the len of training set label
-    def prepare_graph(self, batch_size=10):
-        import tensorflow as tf
-        # With gradient descent training, even this much data is prohibitive.
-        # Subset the training data for faster turnaround.
-        num_labels = len(self.labels_d) 
-        graph = tf.Graph()
-        with graph.as_default():
-            # Input data. For the training data, we use a placeholder that will be fed
-            # at run time with a training minibatch.
-            tf_train_dataset = tf.placeholder(tf.float32,
-                                            shape=(batch_size, self.image_size * self.image_size))
-            tf_train_labels = tf.placeholder(tf.float32, shape=(batch_size, num_labels))
-            tf_valid_dataset = tf.constant(self.valid_dataset)
-            tf_test_dataset = tf.constant(self.test_dataset)
-
-            # Variables.
-            # These are the parameters that we are going to be training. The weight
-            # matrix will be initialized using random valued following a (truncated)
-            # normal distribution. The biases get initialized to zero.
-            weights = tf.Variable(
-                tf.truncated_normal([self.image_size * self.image_size, num_labels]))
-            biases = tf.Variable(tf.zeros([num_labels]))
-
-            # Training computation.
-            # We multiply the inputs with the weight matrix, and add biases. We compute
-            # the softmax and cross-entropy (it's one operation in TensorFlow, because
-            # it's very common, and it can be optimized). We take the average of this
-            # cross-entropy across all training examples: that's our loss.
-            logits = tf.matmul(tf_train_dataset, weights) + biases
-            loss = tf.reduce_mean(
-                tf.nn.softmax_cross_entropy_with_logits(logits, tf_train_labels))
-
-            # Optimizer.
-            # We are going to find the minimum of this loss using gradient descent.
-            optimizer = tf.train.GradientDescentOptimizer(0.5).minimize(loss)
-
-            # Predictions for the training, validation, and test data.
-            # These are not part of training, but merely here so that we can report
-            # accuracy figures as we train.
-            train_prediction = tf.nn.softmax(logits)
-            valid_prediction = tf.nn.softmax(
-                tf.matmul(tf_valid_dataset, weights) + biases)
-            test_prediction = tf.nn.softmax(tf.matmul(tf_test_dataset, weights) + biases)
-
-        return graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction
+    def train(self, train_dataset, train_labels, test_dataset, test_labels, valid_dataset, valid_labels):
+        from tensor import BasicTensor
+        reg = BasicTensor(self.labels_d, self.image_size, "/home/sc/git/sensors/camera/")
+        reg = reg.fit(test_dataset, valid_dataset, 10)
+        score = reg.score(train_dataset, train_labels, test_labels, valid_labels, 10)
+        self.model = reg
+        return score
 
     def predict_set(self, img):
-        graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction = self.prepare_graph(batch_size=1)
-        return self.predict(graph, img, tf_train_dataset, train_prediction)
+        self.model.fit(self.test_dataset, self.valid_dataset, 1)
+        img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
+        return self.model.predict(img)
         
-    def predict_v(self, images):
-        img = list(self.process_images(images))[0]
-        graph, tf_train_dataset, tf_train_labels, optimizer, loss, train_prediction, valid_prediction, test_prediction = self.prepare_graph(batch_size=1)
-        #sio.imsave("/home/sc/Pictures/face-155-X.png", img)
-        #img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
-        return self.predict(graph, img, tf_train_dataset, train_prediction)
-
-    def accuracy(self, predictions, labels):
-        return (np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
-              / predictions.shape[0])
+    def predict(self, images):
+        if self.model is not None:
+            self.model.fit(self.test_dataset, self.valid_dataset, 1)
+            img = list(self.process_images(images))[0]
+            img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
+            return self.model.predict(img)
 
 if __name__  == '__main__':
     face_classif = TensorFace()

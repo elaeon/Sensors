@@ -82,7 +82,7 @@ def detect_face():
     if len(images) > 0:
         #face_classif = SVCFace(model="basic")
         face_classif = TensorFace()
-        print(face_classif.predict_v(images[:5]))
+        print(face_classif.predict(images[:5]))
 
 def detect_face_set():
     import os
