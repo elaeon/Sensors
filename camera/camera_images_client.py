@@ -81,7 +81,7 @@ def detect_face():
     images = get_faces()
     if len(images) > 0:
         #face_classif = SVCFace(model="basic")
-        face_classif = TensorFace(model_name="model", load=True)
+        face_classif = TensorFace("basic_raw", 10, image_size=90)
         print(face_classif.predict(images[:5]))
 
 def detect_face_set():
@@ -90,8 +90,8 @@ def detect_face_set():
 
     images = os.listdir(FACE_TEST_FOLDER_PATH)
     #face_classif = SVCFace(model_name="basic", load=True)
-    #face_classif = TensorFace(model_name="basic", load=True)
-    face_classif = Tensor2LFace(model_name="layer", load=True)
+    face_classif = TensorFace("basic_raw", 10, image_size=90)
+    #face_classif = Tensor2LFace(model_name="layer", load=True)
     #face_classif = ConvTensorFace(model_name="conv", load=True)
     correct = 0
     for image_index, image in enumerate(images):
