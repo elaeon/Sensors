@@ -90,7 +90,7 @@ class ProcessImages(object):
             print('Test set', save['test_dataset'].shape, save['test_labels'].shape)
             return save
 
-    @classmethod
+    #@classmethod
     def process_images(self, images):
         for score, image, d, idx in images:
             print(image.shape, score)
@@ -147,16 +147,16 @@ class BasicFaceClassif(object):
     #        batch_size=batch_size)
     #    print("Score: {}%".format((score * 100)))
 
-    def predict(self, images):
-        if self.model is not None:
-            img = list(self.process_images(images))[0]
+    #def predict(self, images):
+    #    if self.model is not None:
+    #        img = list(self.process_images(images))[0]
             #sio.imsave("/home/sc/Pictures/face-155-X.png", img)
-            img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
-            return self.model.predict(img)
+    #        img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
+    #        return self.model.predict(img)
 
-    def predict_set(self, img):
-        img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
-        return self.model.predict(img)
+    #def predict_set(self, img):
+    #    img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
+    #    return self.model.predict(img)
 
 class SVCFace(BasicFaceClassif):
     def __init__(self, model_name, load_model=False, image_size=90):
@@ -359,17 +359,17 @@ class ConvTensorFace(TensorFace):
         self.model = reg
         return score
 
-    def predict_set(self, img):
-        self.model.fit(self.test_dataset, self.valid_dataset, 1, 5, 90, 1, 64)
-        img = img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
-        return self.model.predict(img)
+    #def predict_set(self, img):
+    #    self.model.fit(self.test_dataset, self.valid_dataset, 1, 5, 90, 1, 64)
+    #    img = img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
+    #    return self.model.predict(img)
         
-    def predict(self, images):
-        if self.model is not None:
-            self.model.fit(self.test_dataset, self.valid_dataset, 1)
-            img = list(self.process_images(images))[0]
-            img = img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
-            return self.model.predict(img)
+    #def predict(self, images):
+    #    if self.model is not None:
+    #        self.model.fit(self.test_dataset, self.valid_dataset, 1)
+    #        img = list(self.process_images(images))[0]
+    #        img = img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
+    #        return self.model.predict(img)
 
 if __name__  == '__main__':
     #face_classif = ConvTensorFace(model_name="conv")

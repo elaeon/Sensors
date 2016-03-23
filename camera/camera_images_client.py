@@ -3,7 +3,7 @@ import socket
 import struct
 from PIL import Image
 import time
-#import dlib
+import dlib
 from skimage import io as sio
 
 import argparse
@@ -66,23 +66,25 @@ def get_faces():
     return images
 
 def process_face(url, number_id):
-    from face_training import BasicFaceClassif
+    from face_training import ProcessImages
 
     images = get_faces()
     if len(images) > 0:
-        face_classif = BasicFaceClassif()
-        #images = images[:3] + images[:-1]
-        for i, image in enumerate(face_classif.process_images(images)):
-            sio.imsave(url+"face-{}-{}.png".format(number_id, i), image)
+        p = ProcessImages(image_size=90)
+        #for i, image in enumerate(p.process_images(images)):
+        #    sio.imsave(url+"face-{}-{}.png".format(number_id, i), image)
+        p.save_images(url, number_id, images)
 
 def detect_face():
-    from face_training import SVCFace, TensorFace
+    from face_training import SVCFace, TensorFace, ProcessImages
 
     images = get_faces()
     if len(images) > 0:
         #face_classif = SVCFace(model="basic")
         face_classif = TensorFace("basic_raw", 10, image_size=90)
-        print(face_classif.predict(images[:5]))
+        p = ProcessImages(image_size=90)
+        image_data = list(p.process_images(images))[0]
+        print(face_classif.predict_set(image_data))
 
 def detect_face_set():
     import os
