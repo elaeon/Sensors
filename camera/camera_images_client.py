@@ -3,7 +3,7 @@ import socket
 import struct
 from PIL import Image
 import time
-import dlib
+#import dlib
 from skimage import io as sio
 
 import argparse
@@ -86,16 +86,23 @@ def detect_face():
 
 def detect_face_set():
     import os
-    from face_training import SVCFace, TensorFace, ConvTensorFace
+    from face_training import SVCFace, TensorFace, Tensor2LFace, ConvTensorFace, FACE_TEST_FOLDER_PATH
 
-    images = os.listdir("/home/sc/Pictures/test/")
+    images = os.listdir(FACE_TEST_FOLDER_PATH)
     #face_classif = SVCFace(model_name="basic", load=True)
-    #face_classif = TensorFace(model_name="model2", load=True)
-    face_classif = ConvTensorFace(model_name="conv", load=True)
+    #face_classif = TensorFace(model_name="basic", load=True)
+    face_classif = Tensor2LFace(model_name="layer", load=True)
+    #face_classif = ConvTensorFace(model_name="conv", load=True)
+    correct = 0
     for image_index, image in enumerate(images):
-        image_file = os.path.join("/home/sc/Pictures/test/", image)
+        image_file = os.path.join(FACE_TEST_FOLDER_PATH, image)
         image_data = sio.imread(image_file)
-        print(face_classif.predict_set(image_data), image)
+        value = image.split("-")[1]
+        prediction = face_classif.predict_set(image_data)
+        print(value, prediction)
+        if value == prediction:
+            correct += 1
+    print("Accuracy: {}%".format(correct*100/(image_index + 1)))
 
 if __name__  == '__main__':
     parser = argparse.ArgumentParser()

@@ -18,7 +18,14 @@ class BasicTensor(object):
 
     def convert_label(self, label):
         #[0, 0, 1.0] -> 155
-        return self.labels_d[self.position_index(label)]
+        try:
+            return self.labels_d[self.position_index(label)]
+        except KeyError:
+            return None
+            #max_value = max(label)
+            #for i, e in enumerate(label):
+            #    if e == max_value:
+            #        return self.labels_d[i]
 
     # batch_size has to be less than the len of training set label
     def fit(self, test_dataset, valid_dataset, batch_size):

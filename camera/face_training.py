@@ -6,8 +6,9 @@ from skimage import filters
 from skimage import transform
 from sklearn import preprocessing
 
-FACE_FOLDER_PATH = "/home/sc/Pictures/face/"
-CHECK_POINT_PATH = "/home/sc/data/face_recog/"
+FACE_FOLDER_PATH = "/home/alejandro/Pictures/face/"
+CHECK_POINT_PATH = "/home/alejandro/data/face_recog/"
+FACE_TEST_FOLDER_PATH = "/home/alejandro/Pictures/test/"
 np.random.seed(133)
 
 class BasicFaceClassif(object):
@@ -138,8 +139,7 @@ class TensorFace(BasicFaceClassif):
 
     def load(self):
         from tensor import BasicTensor, TowLayerTensor
-        #self.model = BasicTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
-        self.model = TowLayerTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
+        self.model = BasicTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
 
     def reformat(self, dataset, labels):
         dataset = dataset.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
@@ -152,8 +152,7 @@ class TensorFace(BasicFaceClassif):
 
     def train(self, train_dataset, train_labels, test_dataset, test_labels, valid_dataset, valid_labels):
         from tensor import BasicTensor, TowLayerTensor
-        #reg = BasicTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
-        reg = TowLayerTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
+        reg = BasicTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
         batch_size = 10
         reg.fit(test_dataset, valid_dataset, batch_size)
         score = reg.score(train_dataset, train_labels, test_labels, valid_labels, batch_size)
@@ -171,6 +170,20 @@ class TensorFace(BasicFaceClassif):
             img = list(self.process_images(images))[0]
             img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
             return self.model.predict(img)
+
+class Tensor2LFace(TensorFace):
+    def load(self):
+        from tensor import TowLayerTensor
+        self.model = TowLayerTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
+
+    def train(self, train_dataset, train_labels, test_dataset, test_labels, valid_dataset, valid_labels):
+        from tensor import TowLayerTensor
+        reg = TowLayerTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
+        batch_size = 10
+        reg.fit(test_dataset, valid_dataset, batch_size)
+        score = reg.score(train_dataset, train_labels, test_labels, valid_labels, batch_size)
+        self.model = reg
+        return score
 
 class ConvTensorFace(TensorFace):
     def __init__(self, model_name, load=False):
@@ -212,8 +225,9 @@ class ConvTensorFace(TensorFace):
             return self.model.predict(img)
 
 if __name__  == '__main__':
-    face_classif = ConvTensorFace(model_name="conv")
-    #face_classif = TensorFace(model_name="layer")
+    #face_classif = ConvTensorFace(model_name="conv")
+    #face_classif = TensorFace(model_name="basic")
+    face_classif = Tensor2LFace(model_name="layer")
     #face_classif = SVCFace()
     face_classif.run()
     #face_classif.save("basic")
