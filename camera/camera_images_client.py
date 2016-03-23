@@ -71,7 +71,7 @@ def process_face(url, number_id):
     images = get_faces()
     if len(images) > 0:
         face_classif = BasicFaceClassif()
-        images = images[:3] + images[:-1]
+        #images = images[:3] + images[:-1]
         for i, image in enumerate(face_classif.process_images(images)):
             sio.imsave(url+"face-{}-{}.png".format(number_id, i), image)
 
@@ -81,16 +81,17 @@ def detect_face():
     images = get_faces()
     if len(images) > 0:
         #face_classif = SVCFace(model="basic")
-        face_classif = TensorFace()
+        face_classif = TensorFace(model_name="model", load=True)
         print(face_classif.predict(images[:5]))
 
 def detect_face_set():
     import os
-    from face_training import SVCFace, TensorFace
+    from face_training import SVCFace, TensorFace, ConvTensorFace
 
     images = os.listdir("/home/sc/Pictures/test/")
-    #face_classif = SVCFace(model="basic")
-    face_classif = TensorFace()
+    #face_classif = SVCFace(model_name="basic", load=True)
+    #face_classif = TensorFace(model_name="model2", load=True)
+    face_classif = ConvTensorFace(model_name="conv", load=True)
     for image_index, image in enumerate(images):
         image_file = os.path.join("/home/sc/Pictures/test/", image)
         image_data = sio.imread(image_file)

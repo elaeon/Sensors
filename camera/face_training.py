@@ -6,16 +6,18 @@ from skimage import filters
 from skimage import transform
 from sklearn import preprocessing
 
+FACE_FOLDER_PATH = "/home/sc/Pictures/face/"
+CHECK_POINT_PATH = "/home/sc/data/face_recog/"
+np.random.seed(133)
 
 class BasicFaceClassif(object):
-    def __init__(self, model=None):
+    def __init__(self, model_name, load=False):
         self.image_size = 90
-        self.folder = "/home/sc/Pictures/face/"
-        np.random.seed(133)
-        if model is None:
-            self.model = None
-        else:
-            self.load(model)
+        self.folder = FACE_FOLDER_PATH        
+        self.model_name = model_name
+        self.model = None
+        if load is True:
+            self.load()
 
     def load_images(self):
         images = os.listdir(self.folder)
@@ -79,13 +81,13 @@ class BasicFaceClassif(object):
             self.test_labels, self.valid_dataset, self.valid_labels)
         print("Score: {}%".format((score * 100)))
 
-    def save(self, filename):
+    def save(self):
         from sklearn.externals import joblib
-        joblib.dump(self.model, '{}.pkl'.format(filename)) 
+        joblib.dump(self.model, '{}.pkl'.format(CHECK_POINT_PATH+self.model_name)) 
 
-    def load(self, filename):
+    def load(self):
         from sklearn.externals import joblib
-        self.model = joblib.load('{}.pkl'.format(filename))
+        self.model = joblib.load('{}.pkl'.format(CHECK_POINT_PATH+self.model_name))
 
     def process_images(self, images):
         for score, image, d, idx in images:
@@ -101,7 +103,7 @@ class BasicFaceClassif(object):
     def predict(self, images):
         if self.model is not None:
             img = list(self.process_images(images))[0]
-            sio.imsave("/home/sc/Pictures/face-155-X.png", img)
+            #sio.imsave("/home/sc/Pictures/face-155-X.png", img)
             img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
             return self.model.predict(img)
 
@@ -110,8 +112,8 @@ class BasicFaceClassif(object):
         return self.model.predict(img)
 
 class SVCFace(BasicFaceClassif):
-    def __init__(self, model=None):
-        super(SVCFace, self).__init__(model=model)
+    def __init__(self, model_name, load=False):
+        super(SVCFace, self).__init__(model_name, load=load)
         self.set_dataset()
 
     def train(self, train_dataset, train_labels, test_dataset, test_labels, valid_dataset, valid_labels):
@@ -128,11 +130,16 @@ class SVCFace(BasicFaceClassif):
         return score
 
 class TensorFace(BasicFaceClassif):
-    def __init__(self):
-        super(TensorFace, self).__init__()
+    def __init__(self, model_name, load=False):
         self.labels_d = dict(enumerate(["106", "110", "155"]))
         self.labels_i = {v: k for k, v in self.labels_d.items()}
+        super(TensorFace, self).__init__(model_name, load=load)
         self.set_dataset()
+
+    def load(self):
+        from tensor import BasicTensor, TowLayerTensor
+        #self.model = BasicTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
+        self.model = TowLayerTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
 
     def reformat(self, dataset, labels):
         dataset = dataset.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
@@ -144,10 +151,12 @@ class TensorFace(BasicFaceClassif):
         return dataset, labels_m
 
     def train(self, train_dataset, train_labels, test_dataset, test_labels, valid_dataset, valid_labels):
-        from tensor import BasicTensor
-        reg = BasicTensor(self.labels_d, self.image_size, "/home/sc/git/sensors/camera/")
-        reg = reg.fit(test_dataset, valid_dataset, 10)
-        score = reg.score(train_dataset, train_labels, test_labels, valid_labels, 10)
+        from tensor import BasicTensor, TowLayerTensor
+        #reg = BasicTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
+        reg = TowLayerTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
+        batch_size = 10
+        reg.fit(test_dataset, valid_dataset, batch_size)
+        score = reg.score(train_dataset, train_labels, test_labels, valid_labels, batch_size)
         self.model = reg
         return score
 
@@ -163,8 +172,48 @@ class TensorFace(BasicFaceClassif):
             img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
             return self.model.predict(img)
 
+class ConvTensorFace(TensorFace):
+    def __init__(self, model_name, load=False):
+        self.num_channels = 1
+        super(ConvTensorFace, self).__init__(model_name, load=load)        
+
+    def reformat(self, dataset, labels):
+        dataset = dataset.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
+        new_labels = np.asarray([self.labels_i[str(int(label))] for label in labels])
+        labels_m = (np.arange(len(self.labels_d)) == new_labels[:,None]).astype(np.float32)
+        return dataset, labels_m
+
+    def load(self):
+        from tensor import ConvTensor
+        self.model = ConvTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
+
+    def train(self, train_dataset, train_labels, test_dataset, test_labels, valid_dataset, valid_labels):
+        from tensor import ConvTensor
+        reg = ConvTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
+        batch_size = 10
+        patch_size = 5
+        depth = 90
+        num_hidden = 64
+        reg.fit(test_dataset, valid_dataset, batch_size, patch_size, depth, self.num_channels, num_hidden)
+        score = reg.score(train_dataset, train_labels, test_labels, valid_labels, batch_size)
+        self.model = reg
+        return score
+
+    def predict_set(self, img):
+        self.model.fit(self.test_dataset, self.valid_dataset, 1, 5, 90, 1, 64)
+        img = img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
+        return self.model.predict(img)
+        
+    def predict(self, images):
+        if self.model is not None:
+            self.model.fit(self.test_dataset, self.valid_dataset, 1)
+            img = list(self.process_images(images))[0]
+            img = img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
+            return self.model.predict(img)
+
 if __name__  == '__main__':
-    face_classif = TensorFace()
+    face_classif = ConvTensorFace(model_name="conv")
+    #face_classif = TensorFace(model_name="layer")
     #face_classif = SVCFace()
     face_classif.run()
     #face_classif.save("basic")
