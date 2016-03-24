@@ -317,18 +317,48 @@ class TensorFace(BasicTensor):
             return self.convert_label(classification[0])
 
 class Tensor2LFace(TensorFace):
-    def load(self):
-        from tensor import TowLayerTensor
-        self.model = TowLayerTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
+    def layers(self):
+        size = 1
+        W1 = tf.Variable(
+            tf.truncated_normal([self.image_size * self.image_size, size]), name='weights')
+        b1 = tf.Variable(tf.zeros([size]), name='biases')
+        hidden = tf.nn.relu(tf.matmul(self.tf_train_dataset, W1) + b1)
 
-    def train(self, train_dataset, train_labels, test_dataset, test_labels, valid_dataset, valid_labels):
-        from tensor import TowLayerTensor
-        reg = TowLayerTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
-        batch_size = 10
-        reg.fit(test_dataset, valid_dataset, batch_size)
-        score = reg.score(train_dataset, train_labels, test_labels, valid_labels, batch_size)
-        self.model = reg
-        return score
+        W2 = tf.Variable(
+            tf.truncated_normal([size, self.num_labels]))
+        b2 = tf.Variable(tf.zeros([self.num_labels]))
+
+        hidden = tf.nn.dropout(hidden, 0.5, seed=66478)
+        self.logits = tf.matmul(hidden, W2) + b2
+        return W1, b1, W2, b2
+
+    def fit(self):
+        self.graph = tf.Graph()
+        with self.graph.as_default():
+            self.tf_train_dataset = tf.placeholder(tf.float32,
+                                            shape=(self.batch_size, self.image_size * self.image_size))
+            self.tf_train_labels = tf.placeholder(tf.float32, shape=(self.batch_size, self.num_labels))
+            self.tf_valid_dataset = tf.constant(self.valid_dataset)
+            self.tf_test_dataset = tf.constant(self.test_dataset)
+
+            W1, b1, W2, b2 = self.layers()
+
+            self.loss = tf.reduce_mean(
+                tf.nn.softmax_cross_entropy_with_logits(self.logits, self.tf_train_labels))
+
+            regularizers = tf.nn.l2_loss(W1) + tf.nn.l2_loss(b1) + tf.nn.l2_loss(W2) + tf.nn.l2_loss(b2)
+            self.loss += 5e-4 * regularizers
+
+            self.optimizer = tf.train.GradientDescentOptimizer(0.5).minimize(self.loss)
+
+            self.train_prediction = tf.nn.softmax(self.logits)
+            hidden_valid =  tf.nn.relu(tf.matmul(self.tf_valid_dataset, W1) + b1)
+            valid_logits = tf.matmul(hidden_valid, W2) + b2
+            self.valid_prediction = tf.nn.softmax(valid_logits)
+            hidden_test = tf.nn.relu(tf.matmul(self.tf_test_dataset, W1) + b1)
+            test_logits = tf.matmul(hidden_test, W2) + b2
+            self.test_prediction = tf.nn.softmax(test_logits)
+
 
 class ConvTensorFace(TensorFace):
     def __init__(self, model_name, load=False, dataset=False, image_size=90):
@@ -370,7 +400,8 @@ class ConvTensorFace(TensorFace):
     #        return self.model.predict(img)
 
 if __name__  == '__main__':
-    face_classif = SVCFace("basic_4", image_size=90)
+    #face_classif = SVCFace("basic_4", image_size=90)
     #face_classif = TensorFace("basic_4", 10, image_size=90)
+    face_classif = Tensor2LFace("basic_4", 10, image_size=90)
     face_classif.fit()
-    face_classif.train()
+    face_classif.train(num_steps=3001)
