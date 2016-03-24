@@ -9,10 +9,10 @@ from sklearn import preprocessing
 import tensorflow as tf
 import cPickle as pickle
 
-FACE_FOLDER_PATH = "/home/sc/Pictures/face/"
-CHECK_POINT_PATH = "/home/sc/data/face_recog/"
-FACE_TEST_FOLDER_PATH = "/home/sc/Pictures/test/"
-DATASET_PATH = "/home/sc/data/dataset/"
+FACE_FOLDER_PATH = "/home/alejandro/Pictures/face/"
+CHECK_POINT_PATH = "/home/alejandro/data/face_recog/"
+FACE_TEST_FOLDER_PATH = "/home/alejandro/Pictures/test/"
+DATASET_PATH = "/home/alejandro/data/dataset/"
 
 np.random.seed(133)
 
@@ -90,7 +90,6 @@ class ProcessImages(object):
             print('Test set', save['test_dataset'].shape, save['test_labels'].shape)
             return save
 
-    #@classmethod
     def process_images(self, images):
         for score, image, d, idx in images:
             print(image.shape, score)
@@ -108,14 +107,11 @@ class ProcessImages(object):
                 sio.imsave(url+"face-{}-{}.png".format(number_id, i), image)
 
 class BasicFaceClassif(object):
-    def __init__(self, model_name, load_model=False, image_size=90):
+    def __init__(self, model_name, image_size=90):
         self.image_size = image_size
         self.model_name = model_name
         self.model = None
         self.load_dataset()
-
-        #if load_model is True:
-        #    self.load()
 
     def reformat(self, dataset, labels):
         dataset = dataset.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
@@ -159,22 +155,33 @@ class BasicFaceClassif(object):
     #    return self.model.predict(img)
 
 class SVCFace(BasicFaceClassif):
-    def __init__(self, model_name, load_model=False, image_size=90):
-        super(SVCFace, self).__init__(model_name, load_model=load, image_size=image_size)
+    def __init__(self, model_name, image_size=90):
+        super(SVCFace, self).__init__(model_name, image_size=image_size)
 
-    def train(self, train_dataset, train_labels, test_dataset, test_labels, 
-            valid_dataset, valid_labels, batch_size=0):
-        from sklearn.linear_model import LogisticRegression
+    def fit(self):
+        #from sklearn.linear_model import LogisticRegression
         from sklearn import svm
-
-        reg = LogisticRegression(penalty='l2')
-        #reg = svm.SVC(kernel='rbf')
-        #reg = svm.LinearSVC(C=1.0, max_iter=1000)
-        reg = reg.fit(train_dataset, train_labels)
-
-        score = reg.score(test_dataset, test_labels)
+        #reg = LogisticRegression(penalty='l2')
+        reg = svm.LinearSVC(C=1.0, max_iter=1000)
+        reg = reg.fit(self.train_dataset, self.train_labels)
         self.model = reg
+
+    def train(self):
+        score = self.model.score(self.test_dataset, self.test_labels)
+        print('Test accuracy: %.1f%%' % (score*100))
+        self.save_model()
         return score
+
+    def predict_set(self, imgs):
+        if self.model is None:
+            self.load_model()
+        return [self.predict(img) for img in imgs]
+
+    def predict(self, img):
+        img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
+        if self.model is None:
+            self.load_model()
+        return str(int(self.model.predict(img)[0]))
 
     def save_model(self):
         from sklearn.externals import joblib
@@ -186,8 +193,8 @@ class SVCFace(BasicFaceClassif):
 
 
 class BasicTensor(BasicFaceClassif):
-    def __init__(self, model_name, batch_size, load_model=False, image_size=90):
-        super(BasicTensor, self).__init__(model_name, load_model=load_model, image_size=image_size)
+    def __init__(self, model_name, batch_size, image_size=90):
+        super(BasicTensor, self).__init__(model_name, image_size=image_size)
         self.batch_size = batch_size
         self.check_point = CHECK_POINT_PATH
         
@@ -231,8 +238,7 @@ class BasicTensor(BasicFaceClassif):
                 tf.matmul(self.tf_valid_dataset, weights) + biases)
             self.test_prediction = tf.nn.softmax(tf.matmul(self.tf_test_dataset, weights) + biases)
 
-    def train(self):
-        num_steps = 3001
+    def train(self, num_steps=3001):
         with tf.Session(graph=self.graph) as session:
             saver = tf.train.Saver()
             tf.initialize_all_variables().run()
@@ -250,12 +256,11 @@ class BasicTensor(BasicFaceClassif):
                 feed_dict = {self.tf_train_dataset : batch_data, self.tf_train_labels : batch_labels}
                 _, l, predictions = session.run(
                 [self.optimizer, self.loss, self.train_prediction], feed_dict=feed_dict)
-            if (step % 500 == 0):
-                print "Minibatch loss at step", step, ":", l
-                print "Minibatch accuracy: %.1f%%" % self.accuracy(predictions, batch_labels)
-                print "Validation accuracy: %.1f%%" % self.accuracy(
-                  self.valid_prediction.eval(), self.valid_labels)
-            #print "Test accuracy: %.1f%%" % self.accuracy(self.test_prediction.eval(), self.test_labels)
+                if (step % 500 == 0):
+                    print "Minibatch loss at step", step, ":", l
+                    print "Minibatch accuracy: %.1f%%" % self.accuracy(predictions, batch_labels)
+                    print "Validation accuracy: %.1f%%" % self.accuracy(
+                      self.valid_prediction.eval(), self.valid_labels)
             score_v = self.accuracy(self.test_prediction.eval(), self.test_labels)
             print('Test accuracy: %.1f' % score_v)
             saver.save(session, '{}{}.ckpt'.format(self.check_point, self.model_name), global_step=step)
@@ -267,11 +272,11 @@ class TestTensor(BasicTensor):
         super(TestTensor, self).__init__(*args, **kwargs)
 
 class TensorFace(BasicTensor):
-    def __init__(self, model_name, batch_size, load_model=False, image_size=90):
-        self.labels_d = dict(enumerate(["106", "110", "155"]))
+    def __init__(self, model_name, batch_size, image_size=90):
+        self.labels_d = dict(enumerate(["106", "110", "155", "222"]))
         self.labels_i = {v: k for k, v in self.labels_d.items()}
         self.num_labels = len(self.labels_d)
-        super(TensorFace, self).__init__(model_name, batch_size, load_model=load_model, image_size=image_size)
+        super(TensorFace, self).__init__(model_name, batch_size, image_size=image_size)
 
     def reformat(self, dataset, labels):
         dataset = dataset.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
@@ -291,13 +296,13 @@ class TensorFace(BasicTensor):
         except KeyError:
             return None
 
-    def predict_set(self, img):
+    def predict_set(self, imgs):
         self.batch_size = 1
         self.fit()
-        img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
-        return self.predict(img)
+        return [self.predict(img) for img in imgs]
         
     def predict(self, img):
+        img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
         with tf.Session(graph=self.graph) as session:
             saver = tf.train.Saver()
             ckpt = tf.train.get_checkpoint_state(self.check_point)
@@ -310,13 +315,6 @@ class TensorFace(BasicTensor):
             classification = session.run(self.train_prediction, feed_dict=feed_dict)
             #print(classification)
             return self.convert_label(classification[0])
-
-    #def predict(self, images):
-    #    if self.model is not None:
-    #        self.model.fit(self.test_dataset, self.valid_dataset, 1)
-    #        img = list(self.process_images(images))[0]
-    #        img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
-    #        return self.model.predict(img)
 
 class Tensor2LFace(TensorFace):
     def load(self):
@@ -372,11 +370,7 @@ class ConvTensorFace(TensorFace):
     #        return self.model.predict(img)
 
 if __name__  == '__main__':
-    #face_classif = ConvTensorFace(model_name="conv")
-    face_classif = TensorFace("basic_raw", 10, image_size=90)
-    #face_classif = Tensor2LFace(model_name="layer")
-    #face_classif = SVCFace()
+    face_classif = SVCFace("basic_4", image_size=90)
+    #face_classif = TensorFace("basic_4", 10, image_size=90)
     face_classif.fit()
     face_classif.train()
-    #face_classif.save_dataset()
-    #face_classif.save("basic")

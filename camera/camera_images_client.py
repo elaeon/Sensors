@@ -71,8 +71,6 @@ def process_face(url, number_id):
     images = get_faces()
     if len(images) > 0:
         p = ProcessImages(image_size=90)
-        #for i, image in enumerate(p.process_images(images)):
-        #    sio.imsave(url+"face-{}-{}.png".format(number_id, i), image)
         p.save_images(url, number_id, images)
 
 def detect_face():
@@ -91,20 +89,24 @@ def detect_face_set():
     from face_training import SVCFace, TensorFace, Tensor2LFace, ConvTensorFace, FACE_TEST_FOLDER_PATH
 
     images = os.listdir(FACE_TEST_FOLDER_PATH)
-    #face_classif = SVCFace(model_name="basic", load=True)
-    face_classif = TensorFace("basic_raw", 10, image_size=90)
+    face_classif = SVCFace(model_name="basic_4", image_size=90)
+    #face_classif = TensorFace("basic_4", 10, image_size=90)
     #face_classif = Tensor2LFace(model_name="layer", load=True)
     #face_classif = ConvTensorFace(model_name="conv", load=True)
-    correct = 0
-    for image_index, image in enumerate(images):
+    images_data = []
+    labels = []
+    for image in images:
         image_file = os.path.join(FACE_TEST_FOLDER_PATH, image)
-        image_data = sio.imread(image_file)
-        value = image.split("-")[1]
-        prediction = face_classif.predict_set(image_data)
-        print(value, prediction)
-        if value == prediction:
+        images_data.append(sio.imread(image_file))
+        labels.append(image.split("-")[1])
+    
+    predictions = face_classif.predict_set(images_data)
+    correct = 0
+    for label, prediction in zip(labels, predictions):
+        print(label, prediction)
+        if label == prediction:
             correct += 1
-    print("Accuracy: {}%".format(correct*100/(image_index + 1)))
+    print("Accuracy: {}%".format(correct*100/len(labels)))
 
 if __name__  == '__main__':
     parser = argparse.ArgumentParser()
