@@ -148,7 +148,7 @@ class SVCFace(BasicFaceClassif):
         reg = reg.fit(self.train_dataset, self.train_labels)
         self.model = reg
 
-    def train(self):
+    def train(self, num_steps=0):
         score = self.model.score(self.test_dataset, self.test_labels)
         print('Test accuracy: %.1f%%' % (score*100))
         self.save_model()
@@ -178,10 +178,10 @@ class SVCFace(BasicFaceClassif):
 
 
 class BasicTensor(BasicFaceClassif):
-    def __init__(self, model_name, batch_size, image_size=90):
+    def __init__(self, model_name, batch_size=None, image_size=90):
         super(BasicTensor, self).__init__(model_name, image_size=image_size)
         self.batch_size = batch_size
-        self.check_point = CHECK_POINT_PATH
+        self.check_point = CHECK_POINT_PATH + self.__class__.__name__ + "/"
         
     def accuracy(self, predictions, labels):
         return (100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
@@ -248,8 +248,14 @@ class BasicTensor(BasicFaceClassif):
                       self.valid_prediction.eval(), self.valid_labels)
             score_v = self.accuracy(self.test_prediction.eval(), self.test_labels)
             print('Test accuracy: %.1f' % score_v)
-            saver.save(session, '{}{}.ckpt'.format(self.check_point, self.model_name), global_step=step)
+            self.save_model(saver, session, step)
+            #saver.save(session, '{}{}.ckpt'.format(self.check_point, self.model_name), global_step=step)
             return score_v
+
+    def save_model(self, saver, session, step):
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        saver.save(session, '{}{}.ckpt'.format(self.check_point, self.model_name), global_step=step)
 
 class TestTensor(BasicTensor):
     def __init__(self, *args, **kwargs):
@@ -257,11 +263,11 @@ class TestTensor(BasicTensor):
         super(TestTensor, self).__init__(*args, **kwargs)
 
 class TensorFace(BasicTensor):
-    def __init__(self, model_name, batch_size, image_size=90):
+    def __init__(self, *args, **kwargs):
         self.labels_d = dict(enumerate(["106", "110", "155", "222"]))
         self.labels_i = {v: k for k, v in self.labels_d.items()}
         self.num_labels = len(self.labels_d)
-        super(TensorFace, self).__init__(model_name, batch_size, image_size=image_size)
+        super(TensorFace, self).__init__(*args, **kwargs)
 
     def reformat(self, dataset, labels):
         dataset = dataset.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
@@ -349,12 +355,12 @@ class Tensor2LFace(TensorFace):
 
 
 class ConvTensorFace(TensorFace):
-    def __init__(self, model_name, batch_size, image_size=90):
+    def __init__(self, model_name, batch_size=None, image_size=90):
         self.num_channels = 1
         self.patch_size = 5
         self.depth = 90
         self.num_hidden = 64
-        super(ConvTensorFace, self).__init__(model_name, batch_size, image_size=image_size)        
+        super(ConvTensorFace, self).__init__(model_name, batch_size=batch_size, image_size=image_size)        
 
     def reformat(self, dataset, labels):
         dataset = dataset.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
@@ -451,7 +457,8 @@ class ConvTensorFace(TensorFace):
                     self.valid_prediction.eval(), self.valid_labels)
             score = self.accuracy(self.test_prediction.eval(), self.test_labels)
             print('Test accuracy: %.1f' % score)
-            saver.save(session, '{}{}.ckpt'.format(self.check_point, self.model_name), global_step=step)
+            self.save_model(saver, session, step)
+            #saver.save(session, '{}{}.ckpt'.format(self.check_point, self.model_name), global_step=step)
             return score
 
     def transform_img(self, img):
@@ -459,9 +466,16 @@ class ConvTensorFace(TensorFace):
 
 
 if __name__  == '__main__':
+    classifs = [
+        SVCFace("basic_4", image_size=90),
+        TensorFace("basic_4", 10, image_size=90),
+        Tensor2LFace("basic_4", 10, image_size=90),
+        ConvTensorFace("basic_4", 10, image_size=90)
+    ]
     #face_classif = SVCFace("basic_4", image_size=90)
     #face_classif = TensorFace("basic_4", 10, image_size=90)
     #face_classif = Tensor2LFace("basic_4", 10, image_size=90)
-    face_classif = ConvTensorFace("basic_4", 10, image_size=90)
-    face_classif.fit()
-    face_classif.train(num_steps=3001)
+    #face_classif = ConvTensorFace("basic_4", 10, image_size=90)
+    for face_classif in classifs:
+        face_classif.fit()
+        face_classif.train(num_steps=3001)
