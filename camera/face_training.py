@@ -136,24 +136,6 @@ class BasicFaceClassif(object):
         self.reformat_all()
         del data
 
-    #def run(self, batch_size=10):
-    #    score = self.train(
-    #        self.train_dataset, self.train_labels, self.test_dataset, 
-    #        self.test_labels, self.valid_dataset, self.valid_labels,
-    #        batch_size=batch_size)
-    #    print("Score: {}%".format((score * 100)))
-
-    #def predict(self, images):
-    #    if self.model is not None:
-    #        img = list(self.process_images(images))[0]
-            #sio.imsave("/home/sc/Pictures/face-155-X.png", img)
-    #        img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
-    #        return self.model.predict(img)
-
-    #def predict_set(self, img):
-    #    img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
-    #    return self.model.predict(img)
-
 class SVCFace(BasicFaceClassif):
     def __init__(self, model_name, image_size=90):
         super(SVCFace, self).__init__(model_name, image_size=image_size)
@@ -177,8 +159,11 @@ class SVCFace(BasicFaceClassif):
             self.load_model()
         return [self.predict(img) for img in imgs]
 
+    def transform_img(self, img):
+        return img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
+
     def predict(self, img):
-        img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
+        img = self.transform_img(img)
         if self.model is None:
             self.load_model()
         return str(int(self.model.predict(img)[0]))
@@ -301,8 +286,11 @@ class TensorFace(BasicTensor):
         self.fit()
         return [self.predict(img) for img in imgs]
         
+    def transform_img(self, img):
+        return img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
+
     def predict(self, img):
-        img = img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
+        img = self.transform_img(img)
         with tf.Session(graph=self.graph) as session:
             saver = tf.train.Saver()
             ckpt = tf.train.get_checkpoint_state(self.check_point)
@@ -361,9 +349,12 @@ class Tensor2LFace(TensorFace):
 
 
 class ConvTensorFace(TensorFace):
-    def __init__(self, model_name, load=False, dataset=False, image_size=90):
+    def __init__(self, model_name, batch_size, image_size=90):
         self.num_channels = 1
-        super(ConvTensorFace, self).__init__(model_name, load=load, dataset=dataset, image_size=image_size)        
+        self.patch_size = 5
+        self.depth = 90
+        self.num_hidden = 64
+        super(ConvTensorFace, self).__init__(model_name, batch_size, image_size=image_size)        
 
     def reformat(self, dataset, labels):
         dataset = dataset.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
@@ -371,37 +362,106 @@ class ConvTensorFace(TensorFace):
         labels_m = (np.arange(len(self.labels_d)) == new_labels[:,None]).astype(np.float32)
         return dataset, labels_m
 
-    def load(self):
-        from tensor import ConvTensor
-        self.model = ConvTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
+    def layers(self, data, layer1_weights, layer1_biases, layer2_weights, layer2_biases, 
+            layer3_weights, layer3_biases, dropout=False):
+        conv = tf.nn.conv2d(data, layer1_weights, [1, 2, 2, 1], padding='SAME')
+        hidden = tf.nn.relu(conv + layer1_biases)
+        pool = tf.nn.max_pool(hidden,
+                              ksize=[1, 2, 2, 1],
+                              strides=[1, 2, 2, 1],
+                              padding='SAME')
+        shape = pool.get_shape().as_list()
+        reshape = tf.reshape(pool, [shape[0], shape[1] * shape[2] * shape[3]])
+        hidden = tf.nn.relu(tf.matmul(reshape, layer2_weights) + layer2_biases)
+        if dropout:
+            hidden = tf.nn.dropout(hidden, 0.5, seed=66478)
+        return tf.matmul(hidden, layer3_weights) + layer3_biases
 
-    def train(self, train_dataset, train_labels, test_dataset, test_labels, valid_dataset, valid_labels):
-        from tensor import ConvTensor
-        reg = ConvTensor(self.labels_d, self.image_size, CHECK_POINT_PATH, model_name=self.model_name)
-        batch_size = 10
-        patch_size = 5
-        depth = 90
-        num_hidden = 64
-        reg.fit(test_dataset, valid_dataset, batch_size, patch_size, depth, self.num_channels, num_hidden)
-        score = reg.score(train_dataset, train_labels, test_labels, valid_labels, batch_size)
-        self.model = reg
-        return score
+    def fit(self):
+        import math
+        self.graph = tf.Graph()
+        with self.graph.as_default():
+            self.tf_train_dataset = tf.placeholder(
+                tf.float32, shape=(self.batch_size, self.image_size, self.image_size, self.num_channels))
+            self.tf_train_labels = tf.placeholder(tf.float32, shape=(self.batch_size, self.num_labels))
+            self.tf_valid_dataset = tf.constant(self.valid_dataset)
+            self.tf_test_dataset = tf.constant(self.test_dataset)
 
-    #def predict_set(self, img):
-    #    self.model.fit(self.test_dataset, self.valid_dataset, 1, 5, 90, 1, 64)
-    #    img = img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
-    #    return self.model.predict(img)
-        
-    #def predict(self, images):
-    #    if self.model is not None:
-    #        self.model.fit(self.test_dataset, self.valid_dataset, 1)
-    #        img = list(self.process_images(images))[0]
-    #        img = img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
-    #        return self.model.predict(img)
+            # Variables.
+            layer3_size = int(math.ceil(self.image_size / 4.))
+            layer1_weights = tf.Variable(tf.truncated_normal(
+                [self.patch_size, self.patch_size, self.num_channels, self.depth], stddev=0.1))
+            layer1_biases = tf.Variable(tf.zeros([self.depth]))
+            layer2_weights = tf.Variable(tf.truncated_normal(
+                [layer3_size * layer3_size * self.depth, self.num_hidden], stddev=0.1)) # 4 num of ksize
+            layer2_biases = tf.Variable(tf.constant(1.0, shape=[self.num_hidden]))
+            layer3_weights = tf.Variable(tf.truncated_normal(
+                [self.num_hidden, self.num_labels], stddev=0.1))
+            layer3_biases = tf.Variable(tf.constant(1.0, shape=[self.num_labels]))
+
+            self.logits = self.layers(self.tf_train_dataset, layer1_weights, 
+                layer1_biases, layer2_weights, layer2_biases, layer3_weights, 
+                layer3_biases, dropout=True)
+
+            self.loss = tf.reduce_mean(
+                tf.nn.softmax_cross_entropy_with_logits(self.logits, self.tf_train_labels))
+            regularizers = tf.nn.l2_loss(layer1_weights) + tf.nn.l2_loss(layer1_biases) +\
+            tf.nn.l2_loss(layer2_weights) + tf.nn.l2_loss(layer2_biases) +\
+            tf.nn.l2_loss(layer3_weights) + tf.nn.l2_loss(layer3_biases)
+            self.loss += 5e-4 * regularizers
+
+            # Optimizer: set up a variable that's incremented once per batch and
+            # controls the learning rate decay.
+            batch = tf.Variable(0)
+            # Decay once per epoch, using an exponential schedule starting at 0.01.
+            learning_rate = tf.train.exponential_decay(
+              0.01,                # Base learning rate.
+              batch * self.batch_size,  # Current index into the dataset.
+              23,          # train_labels.shape[0] Decay step.
+              0.95,                # Decay rate.
+              staircase=True)
+            self.optimizer = tf.train.MomentumOptimizer(learning_rate, 0.9).minimize(self.loss,
+                global_step=batch)
+
+            # Predictions for the training, validation, and test data.
+            self.train_prediction = tf.nn.softmax(self.logits)
+            self.valid_prediction = tf.nn.softmax(self.layers(self.tf_valid_dataset, layer1_weights, 
+                layer1_biases, layer2_weights, layer2_biases, layer3_weights, 
+                layer3_biases))
+            self.test_prediction = tf.nn.softmax(self.layers(self.tf_test_dataset, layer1_weights, 
+                layer1_biases, layer2_weights, layer2_biases, layer3_weights, 
+                layer3_biases))
+
+    def train(self, num_steps=0):
+        with tf.Session(graph=self.graph) as session:
+            saver = tf.train.Saver()
+            tf.initialize_all_variables().run()
+            print("Initialized")
+            for step in xrange(int(150 * self.train_labels.shape[0]) // self.batch_size):
+                offset = (step * self.batch_size) % (self.train_labels.shape[0] - self.batch_size)
+                batch_data = self.train_dataset[offset:(offset + self.batch_size), :, :, :]
+                batch_labels = self.train_labels[offset:(offset + self.batch_size), :]
+                feed_dict = {self.tf_train_dataset : batch_data, self.tf_train_labels : batch_labels}
+                _, l, predictions = session.run(
+                [self.optimizer, self.loss, self.train_prediction], feed_dict=feed_dict)
+                if (step % 5000 == 0):
+                    print "Minibatch loss at step", step, ":", l
+                    print "Minibatch accuracy: %.1f%%" % self.accuracy(predictions, batch_labels)
+                    print "Validation accuracy: %.1f%%" % self.accuracy(
+                    self.valid_prediction.eval(), self.valid_labels)
+            score = self.accuracy(self.test_prediction.eval(), self.test_labels)
+            print('Test accuracy: %.1f' % score)
+            saver.save(session, '{}{}.ckpt'.format(self.check_point, self.model_name), global_step=step)
+            return score
+
+    def transform_img(self, img):
+        return img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
+
 
 if __name__  == '__main__':
     #face_classif = SVCFace("basic_4", image_size=90)
     #face_classif = TensorFace("basic_4", 10, image_size=90)
-    face_classif = Tensor2LFace("basic_4", 10, image_size=90)
+    #face_classif = Tensor2LFace("basic_4", 10, image_size=90)
+    face_classif = ConvTensorFace("basic_4", 10, image_size=90)
     face_classif.fit()
     face_classif.train(num_steps=3001)
