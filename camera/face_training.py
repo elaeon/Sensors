@@ -49,19 +49,25 @@ class ProcessImages(object):
         shuffled_labels = labels[permutation]
         return shuffled_dataset, shuffled_labels
 
-    def save_dataset(self, name, valid_size_p=.1, train_size_p=.6):
-        total_size = self.dataset.shape[0]
-        valid_size = total_size * valid_size_p
-        train_size = total_size * train_size_p
-        v_t_size = valid_size + train_size
-        train_dataset, train_labels = self.randomize(self.dataset[:v_t_size], self.labels[:v_t_size])
-        valid_dataset = train_dataset[:valid_size,:,:]
-        valid_labels = train_labels[:valid_size]
-        train_dataset = train_dataset[valid_size:v_t_size,:,:]
-        train_labels = train_labels[valid_size:v_t_size]
-        test_dataset, test_labels = self.randomize(
-            self.dataset[v_t_size:total_size], self.labels[v_t_size:total_size])
-        
+    def cross_validators(self, dataset, labels, train_size=0.6, valid_size=0.1):
+        from sklearn import cross_validation
+        X_train, X_test, y_train, y_test = cross_validation.train_test_split(
+            dataset, labels, train_size=train_size, random_state=0)
+
+        test_size = 1 - train_size - valid_size
+        if 0 < test_size < 1:
+            test_size_proportion = test_size / (test_size + valid_size)
+            test_size_index = X_test.shape[0] * test_size_proportion
+        else:
+            raise Exception
+        X_validation = X_test[test_size_index:,:,:]
+        y_validation = y_test[test_size_index:]
+        X_test = X_test[:test_size_index,:,:]
+        y_test = y_test[:test_size_index]        
+        return X_train, X_validation, X_test, y_train, y_validation, y_test
+
+    def save_dataset(self, name, valid_size=.1, train_size=.6):
+        train_dataset, valid_dataset, test_dataset, train_labels, valid_labels, test_labels = self.cross_validators(self.dataset, self.labels, train_size=train_size, valid_size=valid_size)
         try:
             f = open(DATASET_PATH+name, 'wb')
             save = {
@@ -125,6 +131,26 @@ class BasicFaceClassif(object):
         print('Validation set', self.valid_dataset.shape, self.valid_labels.shape)
         print('Test set', self.test_dataset.shape, self.test_labels.shape)
 
+    def accuracy(self, predictions, labels):
+        from sklearn.metrics import accuracy_score
+        from sklearn.metrics import precision_score, recall_score
+        from sklearn.metrics import f1_score
+
+        average = "macro"
+        if len(labels.shape) > 1:
+            n_labels = np.argmax(labels, 1)
+            n_predictions = np.argmax(predictions, 1)
+        else:
+            n_labels = labels
+            n_predictions = predictions
+        #false positives
+        print(precision_score(n_labels, n_predictions, average=average, pos_label=None))
+        #false negatives
+        print(recall_score(n_labels, n_predictions, average=average, pos_label=None))
+        #weighted avg presicion and recall
+        print(f1_score(n_labels, n_predictions, average=average, pos_label=None))
+        return accuracy_score(n_labels, n_predictions)
+
     def load_dataset(self):
         data = ProcessImages.load_dataset(self.model_name)
         self.train_dataset = data['train_dataset']
@@ -149,7 +175,8 @@ class SVCFace(BasicFaceClassif):
         self.model = reg
 
     def train(self, num_steps=0):
-        score = self.model.score(self.test_dataset, self.test_labels)
+        predictions = self.model.predict(self.test_dataset)
+        score = self.accuracy(predictions, self.test_labels)
         print('Test accuracy: %.1f%%' % (score*100))
         self.save_model()
         return score
@@ -182,10 +209,6 @@ class BasicTensor(BasicFaceClassif):
         super(BasicTensor, self).__init__(model_name, image_size=image_size)
         self.batch_size = batch_size
         self.check_point = CHECK_POINT_PATH + self.__class__.__name__ + "/"
-        
-    def accuracy(self, predictions, labels):
-        return (100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1))
-            / predictions.shape[0])
 
     def reformat(self, dataset, labels):
         dataset = dataset.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
@@ -243,18 +266,17 @@ class BasicTensor(BasicFaceClassif):
                 [self.optimizer, self.loss, self.train_prediction], feed_dict=feed_dict)
                 if (step % 500 == 0):
                     print "Minibatch loss at step", step, ":", l
-                    print "Minibatch accuracy: %.1f%%" % self.accuracy(predictions, batch_labels)
-                    print "Validation accuracy: %.1f%%" % self.accuracy(
-                      self.valid_prediction.eval(), self.valid_labels)
+                    print "Minibatch accuracy: %.1f%%" % (self.accuracy(predictions, batch_labels)*100)
+                    print "Validation accuracy: %.1f%%" % (self.accuracy(
+                      self.valid_prediction.eval(), self.valid_labels)*100)
             score_v = self.accuracy(self.test_prediction.eval(), self.test_labels)
-            print('Test accuracy: %.1f' % score_v)
+            print('Test accuracy: %.1f' % (score_v*100))
             self.save_model(saver, session, step)
-            #saver.save(session, '{}{}.ckpt'.format(self.check_point, self.model_name), global_step=step)
             return score_v
 
     def save_model(self, saver, session, step):
-        if not os.path.exists(directory):
-            os.makedirs(directory)
+        if not os.path.exists(self.check_point):
+            os.makedirs(self.check_point)
         saver.save(session, '{}{}.ckpt'.format(self.check_point, self.model_name), global_step=step)
 
 class TestTensor(BasicTensor):
@@ -270,15 +292,13 @@ class TensorFace(BasicTensor):
         super(TensorFace, self).__init__(*args, **kwargs)
 
     def reformat(self, dataset, labels):
-        dataset = dataset.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
+        dataset = self.transform_img(dataset)
         new_labels = np.asarray([self.labels_i[str(int(label))] for label in labels])
         labels_m = (np.arange(len(self.labels_d)) == new_labels[:,None]).astype(np.float32)
         return dataset, labels_m
 
     def position_index(self, label):
-        for i, e in enumerate(label):
-            if e == 1:
-                return i
+        return np.argmax(label, 1)[0]
 
     def convert_label(self, label):
         #[0, 0, 1.0] -> 155
@@ -308,7 +328,7 @@ class TensorFace(BasicTensor):
             feed_dict = {self.tf_train_dataset: img}
             classification = session.run(self.train_prediction, feed_dict=feed_dict)
             #print(classification)
-            return self.convert_label(classification[0])
+            return self.convert_label(classification)
 
 class Tensor2LFace(TensorFace):
     def layers(self):
@@ -466,16 +486,15 @@ class ConvTensorFace(TensorFace):
 
 
 if __name__  == '__main__':
+    dataset_name = "test"
+    image_size = 90
+    batch_size = 10
     classifs = [
-        SVCFace("basic_4", image_size=90),
-        TensorFace("basic_4", 10, image_size=90),
-        Tensor2LFace("basic_4", 10, image_size=90),
-        ConvTensorFace("basic_4", 10, image_size=90)
+        #SVCFace(dataset_name, image_size=image_size),
+        #TensorFace(dataset_name, batch_size, image_size=image_size),
+        #Tensor2LFace(dataset_name, batch_size, image_size=image_size),
+        ConvTensorFace(dataset_name, batch_size, image_size=image_size)
     ]
-    #face_classif = SVCFace("basic_4", image_size=90)
-    #face_classif = TensorFace("basic_4", 10, image_size=90)
-    #face_classif = Tensor2LFace("basic_4", 10, image_size=90)
-    #face_classif = ConvTensorFace("basic_4", 10, image_size=90)
     for face_classif in classifs:
         face_classif.fit()
         face_classif.train(num_steps=3001)

@@ -89,11 +89,12 @@ def detect_face_set():
     from face_training import SVCFace, TensorFace, Tensor2LFace, ConvTensorFace, FACE_TEST_FOLDER_PATH
 
     images = os.listdir(FACE_TEST_FOLDER_PATH)
+    dataset_name = "test"
     classifs = [
-        SVCFace("basic_4", image_size=90),
-        TensorFace("basic_4", image_size=90),
-        Tensor2LFace("basic_4", image_size=90),
-        ConvTensorFace("basic_4", image_size=90)
+        #SVCFace(dataset_name, image_size=90),
+        #TensorFace(dataset_name, image_size=90),
+        #Tensor2LFace(dataset_name, image_size=90),
+        ConvTensorFace(dataset_name, image_size=90)
     ]
     
     for face_classif in classifs:
