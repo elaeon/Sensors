@@ -9,10 +9,10 @@ from sklearn import preprocessing
 import tensorflow as tf
 import cPickle as pickle
 
-FACE_FOLDER_PATH = "/home/alejandro/Pictures/face/"
-CHECK_POINT_PATH = "/home/alejandro/data/face_recog/"
-FACE_TEST_FOLDER_PATH = "/home/alejandro/Pictures/test/"
-DATASET_PATH = "/home/alejandro/data/dataset/"
+FACE_FOLDER_PATH = "/home/sc/Pictures/face/"
+CHECK_POINT_PATH = "/home/sc/data/face_recog/"
+FACE_TEST_FOLDER_PATH = "/home/sc/Pictures/test/"
+DATASET_PATH = "/home/sc/data/dataset/"
 
 np.random.seed(133)
 
@@ -104,13 +104,51 @@ class ProcessImages(object):
             if (self.image_size, self.image_size) < img_gray.shape or\
                 img_gray.shape < (self.image_size, self.image_size):
                 img_gray = transform.resize(img_gray, (self.image_size, self.image_size))
-                img_gray = filters.gaussian_filter(img_gray, .5)
+                #img_gray = filters.gaussian_filter(img_gray, .5)
+                img_gray = filters.gaussian(img_gray, .5)
             yield img_gray
 
     def save_images(self, url, number_id, images):
         if len(images) > 0:
             for i, image in enumerate(self.process_images(images)):
                 sio.imsave(url+"face-{}-{}.png".format(number_id, i), image)
+
+class Measure(object):
+    def __init__(self, predictions, labels):
+        if len(labels.shape) > 1:
+            self.labels = np.argmax(labels, 1)
+            self.predictions = np.argmax(predictions, 1)
+        else:
+            self.labels = labels
+            self.predictions = predictions
+        self.average = "macro"
+
+    def accuracy(self):
+        from sklearn.metrics import accuracy_score
+        return accuracy_score(self.labels, self.predictions)
+
+    #false positives
+    def precision(self):
+        from sklearn.metrics import precision_score
+        return precision_score(self.labels, self.predictions, average=self.average, pos_label=None)
+
+    #false negatives
+    def recall(self):
+        from sklearn.metrics import recall_score
+        return recall_score(self.labels, self.predictions, average=self.average, pos_label=None)
+
+    #weighted avg presicion and recall
+    def f1(self):
+        from sklearn.metrics import f1_score
+        return f1_score(self.labels, self.predictions, average=self.average, pos_label=None)
+
+    def print_all(self):
+        print("#############")
+        print("Accuracy: {}%".format(self.accuracy()*100))
+        print("Precision: {}%".format(self.precision()*100))
+        print("Recall: {}%".format(self.recall()*100))
+        print("F1: {}%".format(self.f1()*100))
+        print("#############")
 
 class BasicFaceClassif(object):
     def __init__(self, model_name, image_size=90):
@@ -132,24 +170,9 @@ class BasicFaceClassif(object):
         print('Test set', self.test_dataset.shape, self.test_labels.shape)
 
     def accuracy(self, predictions, labels):
-        from sklearn.metrics import accuracy_score
-        from sklearn.metrics import precision_score, recall_score
-        from sklearn.metrics import f1_score
-
-        average = "macro"
-        if len(labels.shape) > 1:
-            n_labels = np.argmax(labels, 1)
-            n_predictions = np.argmax(predictions, 1)
-        else:
-            n_labels = labels
-            n_predictions = predictions
-        #false positives
-        print(precision_score(n_labels, n_predictions, average=average, pos_label=None))
-        #false negatives
-        print(recall_score(n_labels, n_predictions, average=average, pos_label=None))
-        #weighted avg presicion and recall
-        print(f1_score(n_labels, n_predictions, average=average, pos_label=None))
-        return accuracy_score(n_labels, n_predictions)
+        measure = Measure(predictions, labels)
+        measure.print_all()
+        return measure.accuracy()
 
     def load_dataset(self):
         data = ProcessImages.load_dataset(self.model_name)
@@ -270,7 +293,7 @@ class BasicTensor(BasicFaceClassif):
                     print "Validation accuracy: %.1f%%" % (self.accuracy(
                       self.valid_prediction.eval(), self.valid_labels)*100)
             score_v = self.accuracy(self.test_prediction.eval(), self.test_labels)
-            print('Test accuracy: %.1f' % (score_v*100))
+            #print('Test accuracy: %.1f' % (score_v*100))
             self.save_model(saver, session, step)
             return score_v
 
@@ -476,9 +499,8 @@ class ConvTensorFace(TensorFace):
                     print "Validation accuracy: %.1f%%" % self.accuracy(
                     self.valid_prediction.eval(), self.valid_labels)
             score = self.accuracy(self.test_prediction.eval(), self.test_labels)
-            print('Test accuracy: %.1f' % score)
+            #print('Test accuracy: %.1f' % score)
             self.save_model(saver, session, step)
-            #saver.save(session, '{}{}.ckpt'.format(self.check_point, self.model_name), global_step=step)
             return score
 
     def transform_img(self, img):
@@ -491,9 +513,9 @@ if __name__  == '__main__':
     batch_size = 10
     classifs = [
         #SVCFace(dataset_name, image_size=image_size),
-        #TensorFace(dataset_name, batch_size, image_size=image_size),
+        TensorFace(dataset_name, batch_size, image_size=image_size),
         #Tensor2LFace(dataset_name, batch_size, image_size=image_size),
-        ConvTensorFace(dataset_name, batch_size, image_size=image_size)
+        #ConvTensorFace(dataset_name, batch_size, image_size=image_size)
     ]
     for face_classif in classifs:
         face_classif.fit()

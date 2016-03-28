@@ -86,15 +86,16 @@ def detect_face():
 
 def detect_face_set():
     import os
+    import numpy as np
     from face_training import SVCFace, TensorFace, Tensor2LFace, ConvTensorFace, FACE_TEST_FOLDER_PATH
 
     images = os.listdir(FACE_TEST_FOLDER_PATH)
     dataset_name = "test"
     classifs = [
-        #SVCFace(dataset_name, image_size=90),
-        #TensorFace(dataset_name, image_size=90),
+        SVCFace(dataset_name, image_size=90),
+        TensorFace(dataset_name, image_size=90),
         #Tensor2LFace(dataset_name, image_size=90),
-        ConvTensorFace(dataset_name, image_size=90)
+        #ConvTensorFace(dataset_name, image_size=90)
     ]
     
     for face_classif in classifs:
@@ -107,18 +108,20 @@ def detect_face_set():
             labels.append(image.split("-")[1])
         
         predictions = face_classif.predict_set(images_data)
-        correct = 0
-        for label, prediction in zip(labels, predictions):
-            print(label, prediction)
-            if label == prediction:
-                correct += 1
-        print("Accuracy: {}%".format(correct*100/len(labels)))
+        face_classif.accuracy(predictions, np.asarray(labels))
+
+def build_dataset(name):
+    from face_training import ProcessImages
+    p = ProcessImages(90)
+    p.load_images("/home/sc/Pictures/face/")
+    p.save_dataset(name)
 
 if __name__  == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--empleado", help="numero de empleado", type=int)
     parser.add_argument("--foto", help="numero de empleado", action="store_true")
     parser.add_argument("--set", help="numero de empleado", action="store_true")
+    parser.add_argument("--dataset", help="crea el dataset", type=str)
     args = parser.parse_args()
     if args.empleado:
         process_face("/home/sc/Pictures/face/", args.empleado)
@@ -126,3 +129,6 @@ if __name__  == '__main__':
         detect_face()
     elif args.set:
         detect_face_set()
+    elif args.dataset:
+        print(args.dataset)
+        build_dataset(args.dataset)
