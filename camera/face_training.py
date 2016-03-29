@@ -98,15 +98,17 @@ class ProcessImages(object):
 
     def process_images(self, images):
         for score, image, d, idx in images:
-            print(image.shape, score)
-            img = image[d.top():d.bottom(), d.left():d.right(), 0:3]
-            img_gray = color.rgb2gray(img)
-            if (self.image_size, self.image_size) < img_gray.shape or\
-                img_gray.shape < (self.image_size, self.image_size):
-                img_gray = transform.resize(img_gray, (self.image_size, self.image_size))
-                #img_gray = filters.gaussian_filter(img_gray, .5)
-                img_gray = filters.gaussian(img_gray, .5)
-            yield img_gray
+            try:
+                print(image.shape, score)
+                img = image[d.top():d.bottom(), d.left():d.right(), :]
+                img_gray = color.rgb2gray(img)
+                if (self.image_size, self.image_size) < img_gray.shape or\
+                    img_gray.shape < (self.image_size, self.image_size):
+                    img_gray = transform.resize(img_gray, (self.image_size, self.image_size))
+                    img_gray = filters.gaussian(img_gray, .5)
+                yield img_gray
+            except ValueError:
+                pass
 
     def save_images(self, url, number_id, images):
         if len(images) > 0:
@@ -207,7 +209,7 @@ class SVCFace(BasicFaceClassif):
     def predict_set(self, imgs):
         if self.model is None:
             self.load_model()
-        return [self.predict(img) for img in imgs]
+        return (self.predict(img) for img in imgs)
 
     def transform_img(self, img):
         return img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
@@ -309,7 +311,7 @@ class TestTensor(BasicTensor):
 
 class TensorFace(BasicTensor):
     def __init__(self, *args, **kwargs):
-        self.labels_d = dict(enumerate(["106", "110", "155", "222"]))
+        self.labels_d = dict(enumerate(["106", "110", "155", "222", "295"]))
         self.labels_i = {v: k for k, v in self.labels_d.items()}
         self.num_labels = len(self.labels_d)
         super(TensorFace, self).__init__(*args, **kwargs)
@@ -333,13 +335,12 @@ class TensorFace(BasicTensor):
     def predict_set(self, imgs):
         self.batch_size = 1
         self.fit()
-        return [self.predict(img) for img in imgs]
+        return self.predict(imgs)
         
     def transform_img(self, img):
         return img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
 
-    def predict(self, img):
-        img = self.transform_img(img)
+    def predict(self, imgs):
         with tf.Session(graph=self.graph) as session:
             saver = tf.train.Saver()
             ckpt = tf.train.get_checkpoint_state(self.check_point)
@@ -348,10 +349,12 @@ class TensorFace(BasicTensor):
             else:
                 print("...no checkpoint found...")
 
-            feed_dict = {self.tf_train_dataset: img}
-            classification = session.run(self.train_prediction, feed_dict=feed_dict)
-            #print(classification)
-            return self.convert_label(classification)
+            for img in imgs:
+                img = self.transform_img(img)
+                feed_dict = {self.tf_train_dataset: img}
+                classification = session.run(self.train_prediction, feed_dict=feed_dict)
+                #print(classification)
+                yield self.convert_label(classification)
 
 class Tensor2LFace(TensorFace):
     def layers(self):
@@ -508,12 +511,19 @@ class ConvTensorFace(TensorFace):
 
 
 if __name__  == '__main__':
-    dataset_name = "test"
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", help="nombre del dataset a utilizar", type=str)
+    args = parser.parse_args()
+    if args.dataset:
+        dataset_name = args.dataset
+    else:
+        dataset_name = "test"
     image_size = 90
     batch_size = 10
     classifs = [
-        #SVCFace(dataset_name, image_size=image_size),
-        TensorFace(dataset_name, batch_size, image_size=image_size),
+        SVCFace(dataset_name, image_size=image_size),
+        #TensorFace(dataset_name, batch_size, image_size=image_size),
         #Tensor2LFace(dataset_name, batch_size, image_size=image_size),
         #ConvTensorFace(dataset_name, batch_size, image_size=image_size)
     ]
