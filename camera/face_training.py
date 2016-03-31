@@ -26,7 +26,7 @@ class ProcessImages(object):
         max_num_images = len(images)
         self.dataset = np.ndarray(
             shape=(max_num_images, self.image_size, self.image_size), dtype=np.float32)
-        self.labels = np.ndarray(shape=(max_num_images), dtype=np.float32)
+        self.labels = []
         #min_max_scaler = preprocessing.MinMaxScaler()
         for image_index, image in enumerate(images):
             image_file = os.path.join(folder, image)
@@ -36,12 +36,12 @@ class ProcessImages(object):
                 raise Exception('Unexpected image shape: %s' % str(image_data.shape))
             image_data = image_data.astype(float)
             self.dataset[image_index, :, :] = preprocessing.scale(image_data)
-            self.labels[image_index] = number_id
+            self.labels.append(number_id)
         num_images = image_index
         print 'Full dataset tensor:', self.dataset.shape
         print 'Mean:', np.mean(self.dataset)
         print 'Standard deviation:', np.std(self.dataset)
-        print 'Labels:', self.labels.shape
+        print 'Labels:', len(self.labels)
 
     def randomize(self, dataset, labels):
         permutation = np.random.permutation(labels.shape[0])
@@ -61,9 +61,9 @@ class ProcessImages(object):
         else:
             raise Exception
         X_validation = X_test[test_size_index:,:,:]
-        y_validation = y_test[test_size_index:]
+        y_validation = y_test[int(test_size_index):]
         X_test = X_test[:test_size_index,:,:]
-        y_test = y_test[:test_size_index]        
+        y_test = y_test[:int(test_size_index)]        
         return X_train, X_validation, X_test, y_train, y_validation, y_test
 
     def save_dataset(self, name, valid_size=.1, train_size=.6):
@@ -85,15 +85,15 @@ class ProcessImages(object):
             raise
 
         print("Test set: {}, Valid set: {}, Training set: {}".format(
-            test_labels.shape[0], valid_labels.shape[0], train_labels.shape[0]))
+            len(test_labels), len(valid_labels), len(train_labels)))
 
     @classmethod
     def load_dataset(self, name):
         with open(DATASET_PATH+name, 'rb') as f:
             save = pickle.load(f)
-            print('Training set', save['train_dataset'].shape, save['train_labels'].shape)
-            print('Validation set', save['valid_dataset'].shape, save['valid_labels'].shape)
-            print('Test set', save['test_dataset'].shape, save['test_labels'].shape)
+            print('Training set', save['train_dataset'].shape, len(save['train_labels']))
+            print('Validation set', save['valid_dataset'].shape, len(save['valid_labels']))
+            print('Test set', save['test_dataset'].shape, len(save['test_labels']))
             return save
 
     def process_images(self, images):
@@ -157,19 +157,36 @@ class BasicFaceClassif(object):
         self.image_size = image_size
         self.model_name = model_name
         self.model = None
+        self.le = preprocessing.LabelEncoder()
         self.load_dataset()
 
     def reformat(self, dataset, labels):
         dataset = dataset.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
         return dataset, labels
 
+    def labels_encode(self, labels):
+        self.le.fit(labels)
+        self.num_labels = self.le.classes_.shape[0]
+
+    def position_index(self, label):
+        return label
+
+    def convert_label(self, label):
+        #[0, 0, 1.0] -> 155
+        return self.le.inverse_transform(self.position_index(label))
+
     def reformat_all(self):
-        self.train_dataset, self.train_labels = self.reformat(self.train_dataset, self.train_labels)
-        self.valid_dataset, self.valid_labels = self.reformat(self.valid_dataset, self.valid_labels)
-        self.test_dataset, self.test_labels = self.reformat(self.test_dataset, self.test_labels)
-        print('Training set', self.train_dataset.shape, self.train_labels.shape)
-        print('Validation set', self.valid_dataset.shape, self.valid_labels.shape)
-        print('Test set', self.test_dataset.shape, self.test_labels.shape)
+        all_ds = np.concatenate((self.train_labels, self.valid_labels, self.test_labels), axis=0)
+        self.labels_encode(all_ds)
+        self.train_dataset, self.train_labels = self.reformat(
+            self.train_dataset, self.le.transform(self.train_labels))
+        self.valid_dataset, self.valid_labels = self.reformat(
+            self.valid_dataset, self.le.transform(self.valid_labels))
+        self.test_dataset, self.test_labels = self.reformat(
+            self.test_dataset, self.le.transform(self.test_labels))
+        print('RF-Training set', self.train_dataset.shape, self.train_labels.shape)
+        print('RF-Validation set', self.valid_dataset.shape, self.valid_labels.shape)
+        print('RF-Test set', self.test_dataset.shape, self.test_labels.shape)
 
     def accuracy(self, predictions, labels):
         measure = Measure(predictions, labels)
@@ -218,7 +235,7 @@ class SVCFace(BasicFaceClassif):
         img = self.transform_img(img)
         if self.model is None:
             self.load_model()
-        return str(int(self.model.predict(img)[0]))
+        return self.convert_label(self.model.predict(img)[0])
 
     def save_model(self):
         from sklearn.externals import joblib
@@ -241,7 +258,7 @@ class BasicTensor(BasicFaceClassif):
         labels = (np.arange(self.num_labels) == labels[:,None]).astype(np.float32)
         return dataset, labels
 
-    def fit(self):
+    def fit(self, dropout=True):
         self.graph = tf.Graph()
         with self.graph.as_default():
             # Input data. For the training data, we use a placeholder that will be fed
@@ -258,9 +275,16 @@ class BasicTensor(BasicFaceClassif):
             biases = tf.Variable(tf.zeros([self.num_labels]))
 
             # Training computation.
-            self.logits = tf.matmul(self.tf_train_dataset, weights) + biases
+            if dropout is True:
+                hidden = tf.nn.dropout(self.tf_train_dataset, 0.5, seed=66478)
+                self.logits = tf.matmul(hidden, weights) + biases
+            else:
+                self.logits = tf.matmul(self.tf_train_dataset, weights) + biases
             self.loss = tf.reduce_mean(
-            tf.nn.softmax_cross_entropy_with_logits(self.logits, self.tf_train_labels))
+                tf.nn.softmax_cross_entropy_with_logits(self.logits, self.tf_train_labels))
+
+            regularizers = tf.nn.l2_loss(weights) + tf.nn.l2_loss(biases)
+            self.loss += 5e-4 * regularizers
 
             # Optimizer.
             self.optimizer = tf.train.GradientDescentOptimizer(0.5).minimize(self.loss)
@@ -311,30 +335,19 @@ class TestTensor(BasicTensor):
 
 class TensorFace(BasicTensor):
     def __init__(self, *args, **kwargs):
-        self.labels_d = dict(enumerate(["106", "110", "155", "222", "295"]))
-        self.labels_i = {v: k for k, v in self.labels_d.items()}
-        self.num_labels = len(self.labels_d)
         super(TensorFace, self).__init__(*args, **kwargs)
 
     def reformat(self, dataset, labels):
         dataset = self.transform_img(dataset)
-        new_labels = np.asarray([self.labels_i[str(int(label))] for label in labels])
-        labels_m = (np.arange(len(self.labels_d)) == new_labels[:,None]).astype(np.float32)
+        labels_m = (np.arange(self.num_labels) == labels[:,None]).astype(np.float32)
         return dataset, labels_m
 
     def position_index(self, label):
         return np.argmax(label, 1)[0]
 
-    def convert_label(self, label):
-        #[0, 0, 1.0] -> 155
-        try:
-            return self.labels_d[self.position_index(label)]
-        except KeyError:
-            return None
-
     def predict_set(self, imgs):
         self.batch_size = 1
-        self.fit()
+        self.fit(dropout=False)
         return self.predict(imgs)
         
     def transform_img(self, img):
@@ -408,11 +421,8 @@ class ConvTensorFace(TensorFace):
         self.num_hidden = 64
         super(ConvTensorFace, self).__init__(model_name, batch_size=batch_size, image_size=image_size)        
 
-    def reformat(self, dataset, labels):
-        dataset = dataset.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
-        new_labels = np.asarray([self.labels_i[str(int(label))] for label in labels])
-        labels_m = (np.arange(len(self.labels_d)) == new_labels[:,None]).astype(np.float32)
-        return dataset, labels_m
+    def transform_img(self, img):
+        return img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
 
     def layers(self, data, layer1_weights, layer1_biases, layer2_weights, layer2_biases, 
             layer3_weights, layer3_biases, dropout=False):
@@ -510,23 +520,3 @@ class ConvTensorFace(TensorFace):
         return img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
 
 
-if __name__  == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", help="nombre del dataset a utilizar", type=str)
-    args = parser.parse_args()
-    if args.dataset:
-        dataset_name = args.dataset
-    else:
-        dataset_name = "test"
-    image_size = 90
-    batch_size = 10
-    classifs = [
-        SVCFace(dataset_name, image_size=image_size),
-        #TensorFace(dataset_name, batch_size, image_size=image_size),
-        #Tensor2LFace(dataset_name, batch_size, image_size=image_size),
-        #ConvTensorFace(dataset_name, batch_size, image_size=image_size)
-    ]
-    for face_classif in classifs:
-        face_classif.fit()
-        face_classif.train(num_steps=3001)
