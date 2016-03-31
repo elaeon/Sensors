@@ -515,8 +515,3 @@ class ConvTensorFace(TensorFace):
             #print('Test accuracy: %.1f' % score)
             self.save_model(saver, session, step)
             return score
-
-    def transform_img(self, img):
-        return img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
-
-
