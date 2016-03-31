@@ -328,10 +328,10 @@ class BasicTensor(BasicFaceClassif):
             os.makedirs(self.check_point)
         saver.save(session, '{}{}.ckpt'.format(self.check_point, self.model_name), global_step=step)
 
-class TestTensor(BasicTensor):
-    def __init__(self, *args, **kwargs):
-        self.num_labels = 10
-        super(TestTensor, self).__init__(*args, **kwargs)
+#class TestTensor(BasicTensor):
+#    def __init__(self, *args, **kwargs):
+#        self.num_labels = 10
+#        super(TestTensor, self).__init__(*args, **kwargs)
 
 class TensorFace(BasicTensor):
     def __init__(self, *args, **kwargs):
@@ -370,10 +370,10 @@ class TensorFace(BasicTensor):
                 yield self.convert_label(classification)
 
 class Tensor2LFace(TensorFace):
-    def layers(self):
-        size = 1
+    def layers(self, dropout):
+        size = 1024
         W1 = tf.Variable(
-            tf.truncated_normal([self.image_size * self.image_size, size]), name='weights')
+            tf.truncated_normal([self.image_size * self.image_size, size], stddev=1.0 / 28), name='weights')
         b1 = tf.Variable(tf.zeros([size]), name='biases')
         hidden = tf.nn.relu(tf.matmul(self.tf_train_dataset, W1) + b1)
 
@@ -381,11 +381,12 @@ class Tensor2LFace(TensorFace):
             tf.truncated_normal([size, self.num_labels]))
         b2 = tf.Variable(tf.zeros([self.num_labels]))
 
-        hidden = tf.nn.dropout(hidden, 0.5, seed=66478)
+        if dropout is True:
+            hidden = tf.nn.dropout(hidden, 0.5, seed=66478)
         self.logits = tf.matmul(hidden, W2) + b2
         return W1, b1, W2, b2
 
-    def fit(self):
+    def fit(self, dropout=True):
         self.graph = tf.Graph()
         with self.graph.as_default():
             self.tf_train_dataset = tf.placeholder(tf.float32,
@@ -394,7 +395,7 @@ class Tensor2LFace(TensorFace):
             self.tf_valid_dataset = tf.constant(self.valid_dataset)
             self.tf_test_dataset = tf.constant(self.test_dataset)
 
-            W1, b1, W2, b2 = self.layers()
+            W1, b1, W2, b2 = self.layers(dropout)
 
             self.loss = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits(self.logits, self.tf_train_labels))
