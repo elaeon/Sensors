@@ -38,13 +38,12 @@ class ProcessImages(object):
         self.dataset = np.ndarray(
             shape=(max_num_images, self.image_size, self.image_size), dtype=np.float32)
         self.labels = []
-        #min_max_scaler = preprocessing.MinMaxScaler()
         for image_index, (number_id, image_file) in enumerate(images):
             image_data = sio.imread(image_file)
             if image_data.shape != (self.image_size, self.image_size):
                 raise Exception('Unexpected image shape: %s' % str(image_data.shape))
             image_data = image_data.astype(float)
-            self.dataset[image_index, :, :] = preprocessing.scale(image_data)
+            self.dataset[image_index, :, :] = image_data#preprocessing.scale(image_data)
             self.labels.append(number_id)
         print 'Full dataset tensor:', self.dataset.shape
         print 'Mean:', np.mean(self.dataset)
