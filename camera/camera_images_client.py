@@ -62,16 +62,17 @@ def get_faces():
             for i, d in enumerate(dets):
                 images.append((scores[i], image, d, idx[i]))
 
-    images.sort(reverse=True)
+    #images.sort(reverse=True)
     return images
 
 def process_face(url, number_id):
-    from face_training import ProcessImages
+    from face_training import ProcessImages, FACE_ORIGINAL_PATH
 
     images = get_faces()
     if len(images) > 0:
         p = ProcessImages(image_size=90)
-        p.save_images(url, number_id, images)
+        p.save_images(FACE_ORIGINAL_PATH, number_id, (image for _, image, _, _ in images))
+        p.save_images(url, number_id, p.process_images(images))
 
 def detect_face(face_classif):
     from face_training import ProcessImages
@@ -133,17 +134,15 @@ if __name__  == '__main__':
             "tensor2": face_training.Tensor2LFace,
             "cnn": face_training.ConvTensorFace
         }
-        image_size = 28
+        image_size = 90
         class_ = classifs[args.classif]
         face_classif = class_(dataset_name, image_size=image_size)
-        face_classif.batch_size = 128
+        face_classif.batch_size = 10
         print("#########", face_classif.__class__.__name__)
         if args.foto:                  
             detect_face(face_classif)
         elif args.set:
             detect_face_set(face_classif)
         elif args.train:
-            #image_size = 28
-            #batch_size = 128
             face_classif.fit()
             face_classif.train(num_steps=3001)

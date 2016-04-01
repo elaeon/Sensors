@@ -10,6 +10,7 @@ import tensorflow as tf
 import cPickle as pickle
 
 FACE_FOLDER_PATH = "/home/sc/Pictures/face/"
+FACE_ORIGINAL_PATH = "/home/sc/Pictures/face_o/"
 CHECK_POINT_PATH = "/home/sc/data/face_recog/"
 FACE_TEST_FOLDER_PATH = "/home/sc/Pictures/test/"
 DATASET_PATH = "/home/sc/data/dataset/"
@@ -20,24 +21,31 @@ class ProcessImages(object):
     def __init__(self, image_size):
         self.image_size = image_size
 
-    def load_images(self, folder):
-        folder = FACE_FOLDER_PATH
-        images = os.listdir(folder)
+    def images_from_directories(self, folder_base):
+        images = []
+        for directory in os.listdir(folder_base):
+            files = os.path.join(folder_base, directory)
+            if os.path.isdir(files):
+                number_id = directory
+                for image_file in os.listdir(files):
+                    images.append((number_id, os.path.join(files, image_file)))
+        return images
+
+    def load_images(self, folder_base):
+        folder_base = FACE_FOLDER_PATH
+        images = self.images_from_directories(folder_base)
         max_num_images = len(images)
         self.dataset = np.ndarray(
             shape=(max_num_images, self.image_size, self.image_size), dtype=np.float32)
         self.labels = []
         #min_max_scaler = preprocessing.MinMaxScaler()
-        for image_index, image in enumerate(images):
-            image_file = os.path.join(folder, image)
+        for image_index, (number_id, image_file) in enumerate(images):
             image_data = sio.imread(image_file)
-            number_id = image.split("-")[1]
             if image_data.shape != (self.image_size, self.image_size):
                 raise Exception('Unexpected image shape: %s' % str(image_data.shape))
             image_data = image_data.astype(float)
             self.dataset[image_index, :, :] = preprocessing.scale(image_data)
             self.labels.append(number_id)
-        num_images = image_index
         print 'Full dataset tensor:', self.dataset.shape
         print 'Mean:', np.mean(self.dataset)
         print 'Standard deviation:', np.std(self.dataset)
@@ -111,9 +119,13 @@ class ProcessImages(object):
                 pass
 
     def save_images(self, url, number_id, images):
-        if len(images) > 0:
-            for i, image in enumerate(self.process_images(images)):
-                sio.imsave(url+"face-{}-{}.png".format(number_id, i), image)
+        if not os.path.exists(url):
+            os.makedirs(url)
+        n_url = "{}{}/".format(url, number_id)
+        if not os.path.exists(n_url):
+             os.makedirs(n_url)
+        for i, image in enumerate(images):
+            sio.imsave("{}face-{}-{}.png".format(n_url, number_id, i), image)
 
 class Measure(object):
     def __init__(self, predictions, labels):
@@ -271,7 +283,7 @@ class BasicTensor(BasicFaceClassif):
 
             # Variables.
             weights = tf.Variable(
-            tf.truncated_normal([self.image_size * self.image_size, self.num_labels]))
+                tf.truncated_normal([self.image_size * self.image_size, self.num_labels]))
             biases = tf.Variable(tf.zeros([self.num_labels]))
 
             # Training computation.
@@ -319,19 +331,18 @@ class BasicTensor(BasicFaceClassif):
                     print "Validation accuracy: %.1f%%" % (self.accuracy(
                       self.valid_prediction.eval(), self.valid_labels)*100)
             score_v = self.accuracy(self.test_prediction.eval(), self.test_labels)
-            #print('Test accuracy: %.1f' % (score_v*100))
             self.save_model(saver, session, step)
             return score_v
 
     def save_model(self, saver, session, step):
         if not os.path.exists(self.check_point):
             os.makedirs(self.check_point)
-        saver.save(session, '{}{}.ckpt'.format(self.check_point, self.model_name), global_step=step)
-
-#class TestTensor(BasicTensor):
-#    def __init__(self, *args, **kwargs):
-#        self.num_labels = 10
-#        super(TestTensor, self).__init__(*args, **kwargs)
+        if not os.path.exists(self.check_point + self.model_name + "/"):
+            os.makedirs(self.check_point + self.model_name + "/")
+        
+        saver.save(session, 
+                '{}{}.ckpt'.format(self.check_point + self.model_name + "/", self.model_name), 
+                global_step=step)
 
 class TensorFace(BasicTensor):
     def __init__(self, *args, **kwargs):
@@ -356,7 +367,7 @@ class TensorFace(BasicTensor):
     def predict(self, imgs):
         with tf.Session(graph=self.graph) as session:
             saver = tf.train.Saver()
-            ckpt = tf.train.get_checkpoint_state(self.check_point)
+            ckpt = tf.train.get_checkpoint_state(self.check_point + self.model_name + "/")
             if ckpt and ckpt.model_checkpoint_path:
                 saver.restore(session, ckpt.model_checkpoint_path)
             else:
@@ -370,15 +381,19 @@ class TensorFace(BasicTensor):
                 yield self.convert_label(classification)
 
 class Tensor2LFace(TensorFace):
+    def __init__(self, *args, **kwargs):
+        super(Tensor2LFace, self).__init__(*args, **kwargs)
+        self.num_hidden = 1024
+
     def layers(self, dropout):
-        size = 1024
         W1 = tf.Variable(
-            tf.truncated_normal([self.image_size * self.image_size, size], stddev=1.0 / 28), name='weights')
-        b1 = tf.Variable(tf.zeros([size]), name='biases')
+            tf.truncated_normal([self.image_size * self.image_size, self.num_hidden], stddev=1.0 / 10), 
+            name='weights')
+        b1 = tf.Variable(tf.zeros([self.num_hidden]), name='biases')
         hidden = tf.nn.relu(tf.matmul(self.tf_train_dataset, W1) + b1)
 
         W2 = tf.Variable(
-            tf.truncated_normal([size, self.num_labels]))
+            tf.truncated_normal([self.num_hidden, self.num_labels]))
         b2 = tf.Variable(tf.zeros([self.num_labels]))
 
         if dropout is True:
@@ -415,12 +430,12 @@ class Tensor2LFace(TensorFace):
 
 
 class ConvTensorFace(TensorFace):
-    def __init__(self, model_name, batch_size=None, image_size=90):
+    def __init__(self, *args, **kwargs):
         self.num_channels = 1
         self.patch_size = 5
-        self.depth = 90
+        self.depth = 32
+        super(ConvTensorFace, self).__init__(*args, **kwargs)        
         self.num_hidden = 64
-        super(ConvTensorFace, self).__init__(model_name, batch_size=batch_size, image_size=image_size)        
 
     def transform_img(self, img):
         return img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
@@ -440,7 +455,7 @@ class ConvTensorFace(TensorFace):
             hidden = tf.nn.dropout(hidden, 0.5, seed=66478)
         return tf.matmul(hidden, layer3_weights) + layer3_biases
 
-    def fit(self):
+    def fit(self, dropout=True):
         import math
         self.graph = tf.Graph()
         with self.graph.as_default():
@@ -464,7 +479,7 @@ class ConvTensorFace(TensorFace):
 
             self.logits = self.layers(self.tf_train_dataset, layer1_weights, 
                 layer1_biases, layer2_weights, layer2_biases, layer3_weights, 
-                layer3_biases, dropout=True)
+                layer3_biases, dropout=dropout)
 
             self.loss = tf.reduce_mean(
                 tf.nn.softmax_cross_entropy_with_logits(self.logits, self.tf_train_labels))
@@ -480,7 +495,7 @@ class ConvTensorFace(TensorFace):
             learning_rate = tf.train.exponential_decay(
               0.01,                # Base learning rate.
               batch * self.batch_size,  # Current index into the dataset.
-              23,          # train_labels.shape[0] Decay step.
+              self.train_labels.shape[0],          # train_labels.shape[0] Decay step.
               0.95,                # Decay rate.
               staircase=True)
             self.optimizer = tf.train.MomentumOptimizer(learning_rate, 0.9).minimize(self.loss,
@@ -500,7 +515,7 @@ class ConvTensorFace(TensorFace):
             saver = tf.train.Saver()
             tf.initialize_all_variables().run()
             print("Initialized")
-            for step in xrange(int(150 * self.train_labels.shape[0]) // self.batch_size):
+            for step in xrange(int(15 * self.train_labels.shape[0]) // self.batch_size):
                 offset = (step * self.batch_size) % (self.train_labels.shape[0] - self.batch_size)
                 batch_data = self.train_dataset[offset:(offset + self.batch_size), :, :, :]
                 batch_labels = self.train_labels[offset:(offset + self.batch_size), :]
