@@ -32,7 +32,7 @@ class ProcessImages(object):
         return images
 
     def load_images(self, folder_base):
-        folder_base = FACE_FOLDER_PATH
+        #folder_base = FACE_FOLDER_PATH
         images = self.images_from_directories(folder_base)
         max_num_images = len(images)
         self.dataset = np.ndarray(
@@ -104,15 +104,17 @@ class ProcessImages(object):
             return save
 
     def process_images(self, images):
-        for score, image, d, idx in images:
+        #for score, image, d, idx in images:
+        for image in images:
             try:
-                print(image.shape, score)
-                img = image[d.top():d.bottom(), d.left():d.right(), :]
-                img_gray = color.rgb2gray(img)
+                print(image.shape)
+                #img = image[d.top():d.bottom(), d.left():d.right(), :]
+                img_gray = color.rgb2gray(image)
                 if (self.image_size, self.image_size) < img_gray.shape or\
                     img_gray.shape < (self.image_size, self.image_size):
                     img_gray = transform.resize(img_gray, (self.image_size, self.image_size))
-                    img_gray = filters.gaussian(img_gray, .5)
+                    print("Resized")
+                img_gray = filters.gaussian(img_gray, .5)
                 yield img_gray
             except ValueError:
                 pass
