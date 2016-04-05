@@ -50,42 +50,26 @@ def draw():
             operation = 0
             start = time.time()
 
-def get_faces(images):
-    #detector = dlib.get_frontal_face_detector()
+def get_faces(images, number_id=None):
+    from face_training import FACE_ORIGINAL_PATH
     dlibFacePredictor = "/home/sc/dlib-18.18/python_examples/shape_predictor_68_face_landmarks.dat"
     align = align_image.FaceAlign(dlibFacePredictor)
-    #win = dlib.image_window()
-    #images = []
-    return align.process(images)
-    #for image in read(num_images=20):
-        #dets, scores, idx = detector.run(image, 1)
-        #win.clear_overlay()
-        #win.set_image(image)
-        #win.add_overlay(dets)
-        #if len(dets) > 0:
-        #    for i, d in enumerate(dets):
-        #        images.append((scores[i], image, d, idx[i]))
-
-    #return images
+    if number_id is None:
+        save_path = None
+    else:
+        save_path = (number_id, FACE_ORIGINAL_PATH)
+    return align.process(images, save_path=save_path)
 
 def process_face(url, number_id):
-    from face_training import ProcessImages, FACE_ORIGINAL_PATH
-
-    p = ProcessImages(image_size=90)
-    #p.save_images(FACE_ORIGINAL_PATH, number_id, images)
-    images = get_faces(read(num_images=20))
-    if len(images) > 0:
-        p.save_images(url, number_id, p.process_images(images))
+    p_images = get_faces(read(num_images=20), number_id)
+    p_images.save_images(url, number_id, p_images.process_images())
 
 def detect_face(face_classif):
-    from face_training import ProcessImages
     from collections import Counter
 
-    images = get_faces()
-    if len(images) > 0:
-        p = ProcessImages(image_size=face_classif.image_size)
-        counter = Counter(face_classif.predict_set(p.process_images(images)))
-        print(max(counter.items(), key=lambda x: x[1]))
+    p_images = get_faces(read(num_images=20))
+    counter = Counter(face_classif.predict_set(p_images.process_images()))
+    print(max(counter.items(), key=lambda x: x[1]))
 
 def detect_face_set(face_classif):
     import os

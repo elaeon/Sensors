@@ -20,6 +20,10 @@ np.random.seed(133)
 class ProcessImages(object):
     def __init__(self, image_size):
         self.image_size = image_size
+        self.images = []
+
+    def add_img(self, img):
+        self.images.append(img)
 
     def images_from_directories(self, folder_base):
         images = []
@@ -103,12 +107,10 @@ class ProcessImages(object):
             print('Test set', save['test_dataset'].shape, len(save['test_labels']))
             return save
 
-    def process_images(self, images):
-        #for score, image, d, idx in images:
-        for image in images:
+    def process_images(self):
+        for image in self.images:
             try:
-                print(image.shape)
-                #img = image[d.top():d.bottom(), d.left():d.right(), :]
+                #print(image.shape)
                 img_gray = color.rgb2gray(image)
                 if (self.image_size, self.image_size) < img_gray.shape or\
                     img_gray.shape < (self.image_size, self.image_size):

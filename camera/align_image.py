@@ -3,6 +3,7 @@ import dlib
 from skimage import io
 import os
 import numpy as np
+from face_training import ProcessImages
 
 TEMPLATE = np.float32([
     (0.0792396913815, 0.339223741112), (0.0829219487236, 0.456955367943),
@@ -44,7 +45,7 @@ TPL_MIN, TPL_MAX = np.min(TEMPLATE, axis=0), np.max(TEMPLATE, axis=0)
 MINMAX_TEMPLATE = (TEMPLATE - TPL_MIN) / (TPL_MAX - TPL_MIN)
 
 class DetectorDlib:
-    def __init__(self, facePredictor):
+    def __init__(self, facePredictor, image_size=90):
         """
         Instantiate an 'AlignDlib' object.
         :param facePredictor: The path to dlib's
@@ -54,6 +55,7 @@ class DetectorDlib:
 
         self.detector = dlib.get_frontal_face_detector()
         self.predictor = dlib.shape_predictor(facePredictor)
+        self.image_size = image_size
 
     def getAllFaceBoundingBoxes(self, rgbImg):
         """
@@ -105,6 +107,33 @@ class DetectorDlib:
         points = self.predictor(rgbImg, bb)
         return list(map(lambda p: (p.x, p.y), points.parts()))
 
+    def align(self, image):
+        bb = self.getLargestFaceBoundingBox(image)
+        thumbnail = image[bb.top():bb.bottom(), bb.left():bb.right(), :]
+
+        return thumbnail
+
+    def process(self, images, save_path=None):
+        p = ProcessImages(image_size=self.image_size)
+
+        win = dlib.image_window()
+        images_b = []
+        for img in images:
+            win.clear_overlay()
+            win.set_image(img)            
+            out_img = self.align(img)
+            if self.bb is not None:
+                win.add_overlay(self.bb)
+
+            if out_img is not None:
+                #outBgr = cv2.cvtColor(outRgb, cv2.COLOR_RGB2BGR)
+                p.add_img(out_img)
+            images_b.append(img)
+
+        if save_path is not None:
+            number_id, path = save_path
+            p.save_images(path, number_id, images_b)
+        return p
 
 class FaceAlign(DetectorDlib):
     """
@@ -121,7 +150,7 @@ class FaceAlign(DetectorDlib):
     #: Landmark indices corresponding to the outer eyes and nose.
     OUTER_EYES_AND_NOSE = [36, 45, 33]
 
-    def align(self, imgDim, rgbImg, bb=None,
+    def align(self, rgbImg, bb=None,
               landmarks=None, landmarkIndices=INNER_EYES_AND_BOTTOM_LIP):
         r"""align(imgDim, rgbImg, bb=None, landmarks=None, landmarkIndices=INNER_EYES_AND_BOTTOM_LIP)
         Transform and align a face in an image.
@@ -140,7 +169,6 @@ class FaceAlign(DetectorDlib):
         :return: The aligned RGB image. Shape: (imgDim, imgDim, 3)
         :rtype: numpy.ndarray
         """
-        assert imgDim is not None
         assert rgbImg is not None
         assert landmarkIndices is not None
 
@@ -156,32 +184,37 @@ class FaceAlign(DetectorDlib):
         npLandmarkIndices = np.array(landmarkIndices)
 
         H = cv2.getAffineTransform(npLandmarks[npLandmarkIndices],
-                                   imgDim * MINMAX_TEMPLATE[npLandmarkIndices])
-        thumbnail = cv2.warpAffine(rgbImg, H, (imgDim, imgDim))
+                                   self.image_size * MINMAX_TEMPLATE[npLandmarkIndices])
+        thumbnail = cv2.warpAffine(rgbImg, H, (self.image_size, self.image_size))
 
         return thumbnail
 
 
-    def process(self, images):
+    def process(self, images, save_path=None):
         landmarkIndices = self.OUTER_EYES_AND_NOSE
         landmarkIndices = self.INNER_EYES_AND_BOTTOM_LIP
+        p = ProcessImages(image_size=self.image_size)
 
-        r_images = []
         win = dlib.image_window()
+        images_b = []
         for img in images:
             win.clear_overlay()
             win.set_image(img)            
-            outRgb = self.align(90, img, landmarkIndices=landmarkIndices)
+            out_img = self.align(img, landmarkIndices=landmarkIndices)
             if self.bb is not None:
                 win.add_overlay(self.bb)
-            if outRgb is None:
+            if out_img is None:
                 print("  + Unable to align.")
 
-            if outRgb is not None:
+            if out_img is not None:
                 #outBgr = cv2.cvtColor(outRgb, cv2.COLOR_RGB2BGR)
-                r_images.append(outRgb)
-                #cv2.imwrite("img{}.jpg".format(i), outBgr)
-        return r_images
+                p.add_img(out_img)
+            images_b.append(img)
+
+        if save_path is not None:
+            number_id, path = save_path
+            p.save_images(path, number_id, images_b)
+        return p
 
 if __name__ == '__main__':
     dlibFacePredictor = "/home/sc/dlib-18.18/python_examples/shape_predictor_68_face_landmarks.dat"
