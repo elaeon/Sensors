@@ -36,7 +36,6 @@ class ProcessImages(object):
         return images
 
     def load_images(self, folder_base):
-        #folder_base = FACE_FOLDER_PATH
         images = self.images_from_directories(folder_base)
         max_num_images = len(images)
         self.dataset = np.ndarray(

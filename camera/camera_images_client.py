@@ -50,15 +50,38 @@ def draw():
             operation = 0
             start = time.time()
 
-def get_faces(images, number_id=None):
+def get_faces(images, number_id=None, image_align=True):
     from face_training import FACE_ORIGINAL_PATH
     dlibFacePredictor = "/home/sc/dlib-18.18/python_examples/shape_predictor_68_face_landmarks.dat"
-    align = align_image.FaceAlign(dlibFacePredictor)
+    if image_align is True:
+        align = align_image.FaceAlign(dlibFacePredictor)
+    else:
+        align = align_image.DetectorDlib(dlibFacePredictor)
     if number_id is None:
         save_path = None
     else:
         save_path = (number_id, FACE_ORIGINAL_PATH)
     return align.process(images, save_path=save_path)
+
+
+def rebuild_dataset(url, image_align=True):
+    from face_training import ProcessImages
+    p = ProcessImages(90)
+    images_path = p.images_from_directories(url)
+    images = []
+    labels = []
+    for number_id, image_file in images_path:
+        images.append(sio.imread(image_file))
+        labels.append(number_id)
+    p_images = get_faces(images, image_align=image_align)
+    image_id = {}
+    for number_id, image in zip(labels, p_images.process_images()):
+        image_id.setdefault(number_id, [])
+        image_id[number_id].append(image)
+
+    for number_id, images in image_id.items():
+        p_images.save_images("/home/sc/Pictures/face_t/", number_id, images)
+
 
 def process_face(url, number_id):
     p_images = get_faces(read(num_images=20), number_id)
@@ -101,6 +124,7 @@ if __name__  == '__main__':
         help="predice los datos con el dataset como base de conocimiento", 
         action="store_true")
     parser.add_argument("--build", help="crea el dataset", action="store_true")
+    parser.add_argument("--rebuild", help="construye el dataset desde las images origen", action="store_true")
     parser.add_argument("--train", help="inicia el entrenamiento", action="store_true")
     parser.add_argument("--classif", help="selecciona el clasificador", type=str)
     args = parser.parse_args()
@@ -109,11 +133,13 @@ if __name__  == '__main__':
     else:
         dataset_name = "test_5"
 
-
     if args.empleado:
         process_face("/home/sc/Pictures/face/", args.empleado)
     elif args.build:
         build_dataset(dataset_name, "/home/sc/Pictures/face/")
+    elif args.rebuild:
+        rebuild_dataset("/home/sc/Pictures/face_o/", image_align=False)
+        build_dataset(dataset_name, "/home/sc/Pictures/face_t/")
     else:
         classifs = {
             "svc": face_training.SVCFace,
