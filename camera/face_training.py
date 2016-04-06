@@ -238,18 +238,17 @@ class SVCFace(BasicFaceClassif):
         return score
 
     def predict_set(self, imgs):
-        if self.model is None:
-            self.load_model()
-        return (self.predict(img) for img in imgs)
+        return self.predict(imgs)
 
     def transform_img(self, img):
         return img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
 
-    def predict(self, img):
-        img = self.transform_img(img)
+    def predict(self, imgs):
         if self.model is None:
             self.load_model()
-        return self.convert_label(self.model.predict(img)[0])
+        for img in imgs:
+            img = self.transform_img(img)
+            yield self.convert_label(self.model.predict(img)[0])
 
     def save_model(self):
         from sklearn.externals import joblib
@@ -267,10 +266,13 @@ class BasicTensor(BasicFaceClassif):
         self.check_point = CHECK_POINT_PATH + self.__class__.__name__ + "/"
 
     def reformat(self, dataset, labels):
-        dataset = dataset.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
+        dataset = self.transform_img(dataset)
         # Map 0 to [1.0, 0.0, 0.0 ...], 1 to [0.0, 1.0, 0.0 ...]
-        labels = (np.arange(self.num_labels) == labels[:,None]).astype(np.float32)
-        return dataset, labels
+        labels_m = (np.arange(self.num_labels) == labels[:,None]).astype(np.float32)
+        return dataset, labels_m
+
+    def transform_img(self, img):
+        return img.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
 
     def fit(self, dropout=True):
         self.graph = tf.Graph()
@@ -350,11 +352,6 @@ class TensorFace(BasicTensor):
     def __init__(self, *args, **kwargs):
         super(TensorFace, self).__init__(*args, **kwargs)
 
-    def reformat(self, dataset, labels):
-        dataset = self.transform_img(dataset)
-        labels_m = (np.arange(self.num_labels) == labels[:,None]).astype(np.float32)
-        return dataset, labels_m
-
     def position_index(self, label):
         return np.argmax(label, 1)[0]
 
@@ -362,9 +359,6 @@ class TensorFace(BasicTensor):
         self.batch_size = 1
         self.fit(dropout=False)
         return self.predict(imgs)
-        
-    def transform_img(self, img):
-        return img.reshape((-1, self.image_size*self.image_size)).astype(np.float32)
 
     def predict(self, imgs):
         with tf.Session(graph=self.graph) as session:
@@ -379,8 +373,103 @@ class TensorFace(BasicTensor):
                 img = self.transform_img(img)
                 feed_dict = {self.tf_train_dataset: img}
                 classification = session.run(self.train_prediction, feed_dict=feed_dict)
-                #print(classification)
                 yield self.convert_label(classification)
+
+class TfLTensor(TensorFace):
+    def fit(self, dropout=False):
+        import tflearn
+        input_layer = tflearn.input_data(shape=[None, self.image_size*self.image_size])
+        dense1 = tflearn.fully_connected(input_layer, 124, activation='tanh',
+                                         regularizer='L2', weight_decay=0.001)
+        dropout1 = tflearn.dropout(dense1, 0.5)
+        dense2 = tflearn.fully_connected(dropout1, 64, activation='tanh',
+                                        regularizer='L2', weight_decay=0.001)
+        dropout2 = tflearn.dropout(dense2, 0.5)
+        softmax = tflearn.fully_connected(dropout2, self.num_labels, activation='softmax')
+
+        sgd = tflearn.SGD(learning_rate=0.1, lr_decay=0.96, decay_step=1000)
+        #top_k = tflearn.metrics.Top_k(5)
+        acc = tflearn.metrics.Accuracy()
+        self.net = tflearn.regression(softmax, optimizer=sgd, metric=acc,
+                                 loss='categorical_crossentropy')
+
+    def train(self, num_steps=1000):
+        import tflearn
+        self.model = tflearn.DNN(self.net, tensorboard_verbose=3)
+        self.model.fit(self.train_dataset, 
+            self.train_labels, 
+            n_epoch=1000, 
+            validation_set=(self.test_dataset, self.test_labels),
+            show_metric=True, 
+            run_id="dense_model")
+        self.save_model()
+    
+    def save_model(self):
+        if not os.path.exists(self.check_point):
+            os.makedirs(self.check_point)
+        if not os.path.exists(self.check_point + self.model_name + "/"):
+            os.makedirs(self.check_point + self.model_name + "/")
+
+        self.model.save('{}{}.ckpt'.format(self.check_point + self.model_name + "/", self.model_name))
+
+    def load_model(self):
+        import tflearn
+        self.fit()
+        self.model = tflearn.DNN(self.net, tensorboard_verbose=3)
+        self.model.load('{}{}.ckpt'.format(self.check_point + self.model_name + "/", self.model_name))
+
+    def predict_set(self, imgs):
+        return self.predict(imgs)
+
+    def predict(self, imgs):
+        if self.model is None:
+            self.load_model()
+        for img in imgs:
+            img = self.transform_img(img)
+            yield self.convert_label(self.model.predict(img))
+
+class ConvTensor(TfLTensor):
+    def __init__(self, *args, **kwargs):
+        self.num_channels = 1
+        self.patch_size = 3
+        self.depth = 32
+        super(ConvTensor, self).__init__(*args, **kwargs)        
+        self.num_hidden = 64
+
+    def transform_img(self, img):
+        return img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
+
+    def fit(self, dropout=False):
+        import tflearn
+        network = tflearn.input_data(shape=[None, 90, 90, 1], name='input')
+        network = tflearn.conv_2d(network, self.depth, self.patch_size, activation='relu', regularizer="L2")
+        network = tflearn.max_pool_2d(network, 2)
+        network = tflearn.local_response_normalization(network)
+        network = tflearn.conv_2d(network, self.num_hidden, 3, activation='relu', regularizer="L2")
+        network = tflearn.max_pool_2d(network, 2)
+        network = tflearn.local_response_normalization(network)
+        network = tflearn.fully_connected(network, self.num_hidden*2, activation='tanh')
+        network = tflearn.dropout(network, 0.8)
+        network = tflearn.fully_connected(network, self.num_hidden*4, activation='tanh')
+        network = tflearn.dropout(network, 0.8)
+        network = tflearn.fully_connected(network, self.num_labels, activation='softmax')
+        #top_k = tflearn.metrics.Top_k(5)
+        acc = tflearn.metrics.Accuracy()
+        self.net = tflearn.regression(network, optimizer='adam', metric=acc, learning_rate=0.01,
+                                 loss='categorical_crossentropy', name='target')
+
+    def train(self, num_steps=1000):
+        import tflearn
+        self.model = tflearn.DNN(self.net, tensorboard_verbose=3)
+        self.model.fit(self.train_dataset, 
+            self.train_labels, 
+            n_epoch=1000, 
+            validation_set=(self.test_dataset, self.test_labels),
+            show_metric=True, 
+            snapshot_step=100,
+            run_id="conv_model")
+        self.save_model()
+
 
 class Tensor2LFace(TensorFace):
     def __init__(self, *args, **kwargs):

@@ -92,7 +92,8 @@ def detect_face(face_classif):
 
     p_images = get_faces(read(num_images=20))
     counter = Counter(face_classif.predict_set(p_images.process_images()))
-    print(max(counter.items(), key=lambda x: x[1]))
+    if len(counter) > 0:
+        print(max(counter.items(), key=lambda x: x[1]))
 
 def detect_face_set(face_classif):
     import os
@@ -144,8 +145,8 @@ if __name__  == '__main__':
         classifs = {
             "svc": face_training.SVCFace,
             "tensor": face_training.TensorFace,
-            "tensor2": face_training.Tensor2LFace,
-            "cnn": face_training.ConvTensorFace
+            "tensor2": face_training.TfLTensor,#face_training.Tensor2LFace,
+            "cnn": face_training.ConvTensor,#ConvTensorFace
         }
         image_size = 90
         class_ = classifs[args.classif]
