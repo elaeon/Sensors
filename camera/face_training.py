@@ -39,14 +39,14 @@ class ProcessImages(object):
         images = self.images_from_directories(folder_base)
         max_num_images = len(images)
         self.dataset = np.ndarray(
-            shape=(max_num_images, self.image_size, self.image_size), dtype=np.float32)
+            shape=(max_num_images, self.image_size, self.image_size, 3), dtype=np.float32)
         self.labels = []
         for image_index, (number_id, image_file) in enumerate(images):
             image_data = sio.imread(image_file)
-            if image_data.shape != (self.image_size, self.image_size):
+            if image_data.shape != (self.image_size, self.image_size, 3):
                 raise Exception('Unexpected image shape: %s' % str(image_data.shape))
             image_data = image_data.astype(float)
-            self.dataset[image_index, :, :] = image_data#preprocessing.scale(image_data)
+            self.dataset[image_index] = image_data#preprocessing.scale(image_data)
             self.labels.append(number_id)
         print 'Full dataset tensor:', self.dataset.shape
         print 'Mean:', np.mean(self.dataset)
@@ -70,9 +70,9 @@ class ProcessImages(object):
             test_size_index = X_test.shape[0] * test_size_proportion
         else:
             raise Exception
-        X_validation = X_test[test_size_index:,:,:]
+        X_validation = X_test[test_size_index:]
         y_validation = y_test[int(test_size_index):]
-        X_test = X_test[:test_size_index,:,:]
+        X_test = X_test[:test_size_index]
         y_test = y_test[:int(test_size_index)]        
         return X_train, X_validation, X_test, y_train, y_validation, y_test
 
@@ -106,17 +106,19 @@ class ProcessImages(object):
             print('Test set', save['test_dataset'].shape, len(save['test_labels']))
             return save
 
-    def process_images(self):
+    def process_images(self, gray=True, blur=True):
         for image in self.images:
             try:
-                #print(image.shape)
-                img_gray = color.rgb2gray(image)
-                if (self.image_size, self.image_size) < img_gray.shape or\
-                    img_gray.shape < (self.image_size, self.image_size):
-                    img_gray = transform.resize(img_gray, (self.image_size, self.image_size))
+                if gray is True:
+                    image = color.rgb2gray(image)
+
+                if (self.image_size, self.image_size) < image.shape or\
+                    image.shape < (self.image_size, self.image_size):
+                    image = transform.resize(image, (self.image_size, self.image_size))
                     print("Resized")
-                img_gray = filters.gaussian(img_gray, .5)
-                yield img_gray
+                if blur is True:
+                    image = filters.gaussian(image, .5)
+                yield image
             except ValueError:
                 pass
 
@@ -445,12 +447,12 @@ class ConvTensor(TfLTensor):
         network = tflearn.conv_2d(network, self.depth, self.patch_size, activation='relu', regularizer="L2")
         network = tflearn.max_pool_2d(network, 2)
         network = tflearn.local_response_normalization(network)
-        network = tflearn.conv_2d(network, self.num_hidden, 3, activation='relu', regularizer="L2")
+        network = tflearn.conv_2d(network, self.depth*2, self.patch_size, activation='relu', regularizer="L2")
         network = tflearn.max_pool_2d(network, 2)
         network = tflearn.local_response_normalization(network)
-        network = tflearn.fully_connected(network, self.num_hidden*2, activation='tanh')
+        network = tflearn.fully_connected(network, self.depth*4, activation='tanh')
         network = tflearn.dropout(network, 0.8)
-        network = tflearn.fully_connected(network, self.num_hidden*4, activation='tanh')
+        network = tflearn.fully_connected(network, self.depth*8, activation='tanh')
         network = tflearn.dropout(network, 0.8)
         network = tflearn.fully_connected(network, self.num_labels, activation='softmax')
         #top_k = tflearn.metrics.Top_k(5)
@@ -463,11 +465,81 @@ class ConvTensor(TfLTensor):
         self.model = tflearn.DNN(self.net, tensorboard_verbose=3)
         self.model.fit(self.train_dataset, 
             self.train_labels, 
-            n_epoch=1000, 
+            n_epoch=100, 
             validation_set=(self.test_dataset, self.test_labels),
             show_metric=True, 
             snapshot_step=100,
             run_id="conv_model")
+        self.save_model()
+
+class ResidualTensor(TfLTensor):
+    def __init__(self, *args, **kwargs):
+        self.num_channels = 3
+        self.patch_size = 3
+        self.depth = 32
+        super(ResidualTensor, self).__init__(*args, **kwargs)        
+        self.num_hidden = 64
+
+    def transform_img(self, img):
+        return img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
+
+    def reformat_all(self):
+        import tflearn.data_utils as du
+        all_ds = np.concatenate((self.train_labels, self.valid_labels, self.test_labels), axis=0)
+        self.labels_encode(all_ds)
+        self.train_dataset, self.train_labels = self.reformat(
+            self.train_dataset, self.le.transform(self.train_labels))
+        self.valid_dataset, self.valid_labels = self.reformat(
+            self.valid_dataset, self.le.transform(self.valid_labels))
+        self.test_dataset, self.test_labels = self.reformat(
+            self.test_dataset, self.le.transform(self.test_labels))
+
+        self.train_dataset, mean = du.featurewise_zero_center(self.train_dataset)
+        self.test_dataset = du.featurewise_zero_center(self.test_dataset, mean)
+
+        print('RF-Training set', self.train_dataset.shape, self.train_labels.shape)
+        print('RF-Validation set', self.valid_dataset.shape, self.valid_labels.shape)
+        print('RF-Test set', self.test_dataset.shape, self.test_labels.shape)
+
+    def fit(self, dropout=False):
+        import tflearn
+
+        net = tflearn.input_data(shape=[None, self.image_size, self.image_size, self.num_channels])
+        net = tflearn.conv_2d(net, self.depth, self.patch_size, activation='relu', bias=False)
+        net = tflearn.batch_normalization(net)
+        # Residual blocks
+        net = tflearn.deep_residual_block(net, self.patch_size, self.depth*2)
+        net = tflearn.deep_residual_block(net, 1, self.depth*4, downsample=True)
+        net = tflearn.deep_residual_block(net, self.patch_size, self.depth*4)
+        net = tflearn.deep_residual_block(net, 1, self.depth*8, downsample=True)
+        net = tflearn.deep_residual_block(net, self.patch_size, self.depth*8)
+        net_shape = net.get_shape().as_list()
+        k_size = [1, net_shape[1], net_shape[2], 1]
+        net = tflearn.avg_pool_2d(net, k_size, padding='valid', strides=1)
+        # Regression
+        net = tflearn.fully_connected(net, self.num_labels, activation='softmax')
+        sgd = tflearn.SGD(learning_rate=0.1, lr_decay=0.96, decay_step=300)
+        acc = tflearn.metrics.Accuracy()
+        self.net = tflearn.regression(net, optimizer=sgd,
+                                metric=acc,
+                                loss='categorical_crossentropy',
+                                learning_rate=0.1)
+
+    def train(self, num_steps=1000):
+        import tflearn
+        self.model = tflearn.DNN(self.net, 
+            checkpoint_path='model_resnet_mnist', 
+            tensorboard_verbose=3,
+            max_checkpoints=10)
+
+        self.model.fit(self.train_dataset, 
+            self.train_labels, 
+            n_epoch=100, 
+            validation_set=(self.test_dataset, self.test_labels),
+            show_metric=True, 
+            snapshot_step=100,
+            batch_size=self.batch_size,
+            run_id="resnet_mnist")
         self.save_model()
 
 

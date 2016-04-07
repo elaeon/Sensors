@@ -75,7 +75,7 @@ def rebuild_dataset(url, image_align=True):
         labels.append(number_id)
     p_images = get_faces(images, image_align=image_align)
     image_id = {}
-    for number_id, image in zip(labels, p_images.process_images()):
+    for number_id, image in zip(labels, p_images.process_images(gray=False, blur=False)):
         image_id.setdefault(number_id, [])
         image_id[number_id].append(image)
 
@@ -85,13 +85,13 @@ def rebuild_dataset(url, image_align=True):
 
 def process_face(url, number_id):
     p_images = get_faces(read(num_images=20), number_id)
-    p_images.save_images(url, number_id, p_images.process_images())
+    p_images.save_images(url, number_id, p_images.process_images(gray=False, blur=False))
 
 def detect_face(face_classif):
     from collections import Counter
 
     p_images = get_faces(read(num_images=20))
-    counter = Counter(face_classif.predict_set(p_images.process_images()))
+    counter = Counter(face_classif.predict_set(p_images.process_images(gray=False, blur=False)))
     if len(counter) > 0:
         print(max(counter.items(), key=lambda x: x[1]))
 
@@ -139,7 +139,7 @@ if __name__  == '__main__':
     elif args.build:
         build_dataset(dataset_name, "/home/sc/Pictures/face/")
     elif args.rebuild:
-        rebuild_dataset("/home/sc/Pictures/face_o/", image_align=False)
+        rebuild_dataset("/home/sc/Pictures/face_o/", image_align=True)
         build_dataset(dataset_name, "/home/sc/Pictures/face_t/")
     else:
         classifs = {
@@ -147,6 +147,7 @@ if __name__  == '__main__':
             "tensor": face_training.TensorFace,
             "tensor2": face_training.TfLTensor,#face_training.Tensor2LFace,
             "cnn": face_training.ConvTensor,#ConvTensorFace
+            "residual": face_training.ResidualTensor
         }
         image_size = 90
         class_ = classifs[args.classif]
