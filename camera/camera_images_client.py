@@ -13,7 +13,7 @@ import align_image
 # Accept a single connection and make a file-like object out of it
 def read(num_images=5):
     client_socket = socket.socket()
-    client_socket.connect(('192.168.52.101', 8000))
+    client_socket.connect(('192.168.52.102', 8000))
     client_socket.send(str(num_images))
     connection = client_socket.makefile('rb')
     try:
@@ -110,9 +110,9 @@ def detect_face_set(face_classif):
     predictions = face_classif.predict_set(images_data)
     face_classif.accuracy(list(predictions), np.asarray(labels))
 
-def build_dataset(name, directory, channels=None):
+def build_dataset(name, directory, image_size, channels=None):
     from face_training import ProcessImages
-    p = ProcessImages(90)
+    p = ProcessImages(image_size)
     p.load_images(directory, channels=channels)
     p.save_dataset(name)
 
@@ -129,6 +129,7 @@ if __name__  == '__main__':
     parser.add_argument("--train", help="inicia el entrenamiento", action="store_true")
     parser.add_argument("--classif", help="selecciona el clasificador", type=str)
     args = parser.parse_args()
+    image_size = 90
     if args.dataset:
         dataset_name = args.dataset
     else:
@@ -137,12 +138,11 @@ if __name__  == '__main__':
     if args.empleado:
         process_face("/home/sc/Pictures/face/", args.empleado)
     elif args.build:
-        build_dataset(dataset_name, "/home/sc/Pictures/face/")
+        build_dataset(dataset_name, "/home/sc/Pictures/face/", image_size)
     elif args.rebuild:
         rebuild_dataset("/home/sc/Pictures/face_o/", image_align=True)
-        build_dataset(dataset_name, "/home/sc/Pictures/face_t/", channels=None)
-    else:
-        image_size = 90
+        build_dataset(dataset_name, "/home/sc/Pictures/face_t/", image_size, channels=None)
+    else:        
         classifs = {
             "svc": {
                 "name": face_training.SVCFace,
