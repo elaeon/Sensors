@@ -35,15 +35,21 @@ class ProcessImages(object):
                     images.append((number_id, os.path.join(files, image_file)))
         return images
 
-    def load_images(self, folder_base):
+    def load_images(self, folder_base, channels=None):
         images = self.images_from_directories(folder_base)
         max_num_images = len(images)
-        self.dataset = np.ndarray(
-            shape=(max_num_images, self.image_size, self.image_size, 3), dtype=np.float32)
+        if channels is None:
+            self.dataset = np.ndarray(
+                shape=(max_num_images, self.image_size, self.image_size), dtype=np.float32)
+            dim = (self.image_size, self.image_size)
+        else:
+            self.dataset = np.ndarray(
+                shape=(max_num_images, self.image_size, self.image_size, channels), dtype=np.float32)
+            dim = (self.image_size, self.image_size, channels)
         self.labels = []
         for image_index, (number_id, image_file) in enumerate(images):
             image_data = sio.imread(image_file)
-            if image_data.shape != (self.image_size, self.image_size, 3):
+            if image_data.shape != dim:
                 raise Exception('Unexpected image shape: %s' % str(image_data.shape))
             image_data = image_data.astype(float)
             self.dataset[image_index] = image_data#preprocessing.scale(image_data)
@@ -400,7 +406,7 @@ class TfLTensor(TensorFace):
         self.model = tflearn.DNN(self.net, tensorboard_verbose=3)
         self.model.fit(self.train_dataset, 
             self.train_labels, 
-            n_epoch=1000, 
+            n_epoch=num_steps, 
             validation_set=(self.test_dataset, self.test_labels),
             show_metric=True, 
             run_id="dense_model")
@@ -432,18 +438,18 @@ class TfLTensor(TensorFace):
 
 class ConvTensor(TfLTensor):
     def __init__(self, *args, **kwargs):
-        self.num_channels = 1
+        self.num_channels = kwargs.get("num_channels", 1)
         self.patch_size = 3
         self.depth = 32
-        super(ConvTensor, self).__init__(*args, **kwargs)        
-        self.num_hidden = 64
+        super(ConvTensor, self).__init__(*args, **kwargs)
 
     def transform_img(self, img):
         return img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
 
     def fit(self, dropout=False):
         import tflearn
-        network = tflearn.input_data(shape=[None, 90, 90, 1], name='input')
+        network = tflearn.input_data(
+            shape=[None, self.image_size, self.image_size, self.num_channels], name='input')
         network = tflearn.conv_2d(network, self.depth, self.patch_size, activation='relu', regularizer="L2")
         network = tflearn.max_pool_2d(network, 2)
         network = tflearn.local_response_normalization(network)
@@ -465,7 +471,7 @@ class ConvTensor(TfLTensor):
         self.model = tflearn.DNN(self.net, tensorboard_verbose=3)
         self.model.fit(self.train_dataset, 
             self.train_labels, 
-            n_epoch=100, 
+            n_epoch=num_steps, 
             validation_set=(self.test_dataset, self.test_labels),
             show_metric=True, 
             snapshot_step=100,
@@ -474,11 +480,10 @@ class ConvTensor(TfLTensor):
 
 class ResidualTensor(TfLTensor):
     def __init__(self, *args, **kwargs):
-        self.num_channels = 3
+        self.num_channels = kwargs.get("num_channels", 1)
         self.patch_size = 3
         self.depth = 32
-        super(ResidualTensor, self).__init__(*args, **kwargs)        
-        self.num_hidden = 64
+        super(ResidualTensor, self).__init__(*args, **kwargs)
 
     def transform_img(self, img):
         return img.reshape((-1, self.image_size, self.image_size, self.num_channels)).astype(np.float32)
@@ -534,7 +539,7 @@ class ResidualTensor(TfLTensor):
 
         self.model.fit(self.train_dataset, 
             self.train_labels, 
-            n_epoch=100, 
+            n_epoch=num_steps, 
             validation_set=(self.test_dataset, self.test_labels),
             show_metric=True, 
             snapshot_step=100,

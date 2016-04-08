@@ -75,7 +75,7 @@ def rebuild_dataset(url, image_align=True):
         labels.append(number_id)
     p_images = get_faces(images, image_align=image_align)
     image_id = {}
-    for number_id, image in zip(labels, p_images.process_images(gray=False, blur=False)):
+    for number_id, image in zip(labels, p_images.process_images(gray=True, blur=True)):
         image_id.setdefault(number_id, [])
         image_id[number_id].append(image)
 
@@ -85,13 +85,13 @@ def rebuild_dataset(url, image_align=True):
 
 def process_face(url, number_id):
     p_images = get_faces(read(num_images=20), number_id)
-    p_images.save_images(url, number_id, p_images.process_images(gray=False, blur=False))
+    p_images.save_images(url, number_id, p_images.process_images(gray=True, blur=True))
 
 def detect_face(face_classif):
     from collections import Counter
 
-    p_images = get_faces(read(num_images=20))
-    counter = Counter(face_classif.predict_set(p_images.process_images(gray=False, blur=False)))
+    p_images = get_faces(read(num_images=20), image_align=True)
+    counter = Counter(face_classif.predict_set(p_images.process_images(gray=True, blur=True)))
     if len(counter) > 0:
         print(max(counter.items(), key=lambda x: x[1]))
 
@@ -110,10 +110,10 @@ def detect_face_set(face_classif):
     predictions = face_classif.predict_set(images_data)
     face_classif.accuracy(list(predictions), np.asarray(labels))
 
-def build_dataset(name, directory):
+def build_dataset(name, directory, channels=None):
     from face_training import ProcessImages
     p = ProcessImages(90)
-    p.load_images(directory)
+    p.load_images(directory, channels=channels)
     p.save_dataset(name)
 
 if __name__  == '__main__':
@@ -140,18 +140,29 @@ if __name__  == '__main__':
         build_dataset(dataset_name, "/home/sc/Pictures/face/")
     elif args.rebuild:
         rebuild_dataset("/home/sc/Pictures/face_o/", image_align=True)
-        build_dataset(dataset_name, "/home/sc/Pictures/face_t/")
+        build_dataset(dataset_name, "/home/sc/Pictures/face_t/", channels=None)
     else:
-        classifs = {
-            "svc": face_training.SVCFace,
-            "tensor": face_training.TensorFace,
-            "tensor2": face_training.TfLTensor,#face_training.Tensor2LFace,
-            "cnn": face_training.ConvTensor,#ConvTensorFace
-            "residual": face_training.ResidualTensor
-        }
         image_size = 90
-        class_ = classifs[args.classif]
-        face_classif = class_(dataset_name, image_size=image_size)
+        classifs = {
+            "svc": {
+                "name": face_training.SVCFace,
+                "params": {"image_size": image_size}},
+            "tensor": {
+                "name": face_training.TensorFace,
+                "params": {"image_size": image_size}},
+            "tensor2": {
+                "name": face_training.TfLTensor,#face_training.Tensor2LFace,
+                "params": {"image_size": image_size}},
+            "cnn": {
+                "name": face_training.ConvTensor,#ConvTensorFace
+                "params": {"num_channels": 1, "image_size": image_size}},
+            "residual": {
+                "name": face_training.ResidualTensor,
+                "params": {"num_channels": 1, "image_size": image_size}}
+        }
+        class_ = classifs[args.classif]["name"]
+        params = classifs[args.classif]["params"]
+        face_classif = class_(dataset_name, **params)
         face_classif.batch_size = 10
         print("#########", face_classif.__class__.__name__)
         if args.foto:                  
@@ -160,4 +171,4 @@ if __name__  == '__main__':
             detect_face_set(face_classif)
         elif args.train:
             face_classif.fit()
-            face_classif.train(num_steps=3001)
+            face_classif.train(num_steps=50)
