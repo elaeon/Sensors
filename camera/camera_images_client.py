@@ -7,7 +7,7 @@ import dlib
 from skimage import io as sio
 
 import argparse
-import face_training
+#import face_training
 import align_image
 
 # Accept a single connection and make a file-like object out of it
@@ -36,6 +36,7 @@ def read(num_images=5):
         connection.close()
         client_socket.close()
 
+
 def draw():
     win = dlib.image_window()
     start = time.time()
@@ -49,6 +50,7 @@ def draw():
             print("{} fps".format(operation))
             operation = 0
             start = time.time()
+
 
 def get_faces(images, number_id=None, image_align=True):
     from face_training import FACE_ORIGINAL_PATH
@@ -74,18 +76,20 @@ def rebuild_dataset(url, image_align=True):
         images.append(sio.imread(image_file))
         labels.append(number_id)
     p_images = get_faces(images, image_align=image_align)
-    image_id = {}
-    for number_id, image in zip(labels, p_images.process_images(gray=True, blur=True)):
-        image_id.setdefault(number_id, [])
-        image_id[number_id].append(image)
+    image_train, image_test = build_train_test_img(zip(labels, p_images.process_images(gray=True, blur=True)))
 
-    for number_id, images in image_id.items():
+    for number_id, images in image_train.items():
         p_images.save_images("/home/sc/Pictures/face_t/", number_id, images)
+
+    for number_id, images in image_test.items():
+        p_images.save_images(FACE_TEST_FOLDER_PATH, number_id, images)
 
 
 def process_face(url, number_id):
     p_images = get_faces(read(num_images=20), number_id)
-    p_images.save_images(url, number_id, p_images.process_images(gray=True, blur=True))
+    images, _ = build_train_test_img((number_id, p_images.process_images(gray=True, blur=True)), sample=False)
+    p_images.save_images(url, number_id, images.values())
+
 
 def detect_face(face_classif):
     from collections import Counter
@@ -94,6 +98,7 @@ def detect_face(face_classif):
     counter = Counter(face_classif.predict_set(p_images.process_images(gray=True, blur=True)))
     if len(counter) > 0:
         print(max(counter.items(), key=lambda x: x[1]))
+
 
 def detect_face_set(face_classif):
     import os
@@ -110,11 +115,41 @@ def detect_face_set(face_classif):
     predictions = face_classif.predict_set(images_data)
     face_classif.accuracy(list(predictions), np.asarray(labels))
 
+
 def build_dataset(name, directory, image_size, channels=None):
     from face_training import ProcessImages
     p = ProcessImages(image_size)
-    p.load_images(directory, channels=channels)
+    p.images_to_dataset(directory, channels=channels)
     p.save_dataset(name)
+
+
+def build_train_test_img(process_images, sample=True):
+    import random
+    images = {}
+    images_index = {}
+    for number_id, images in process_images:
+        images.setdefault(number_id, [])
+        images_index.setdefault(number_id, [])
+        for i, image in enumerate(images):
+            images[number_id].append(image)
+            images_index[number_id].append(i)
+
+    if sample is True:
+        sample = {}
+        sample_index = {}
+        for number_id in images:
+            indexes = random.sample(images_index[number_id], 3)
+            sample[number_id] = [images[number_id][index] for index in indexes]
+            sample_index[number_id] = indexes
+        
+        for number_id, paths in sample.items():
+            for path in paths:
+                if path in images[number_id]:
+                    images[number_id].remove(path)
+        return images, sample
+    else:
+        return images, {}
+
 
 if __name__  == '__main__':
     parser = argparse.ArgumentParser()

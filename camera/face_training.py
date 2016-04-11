@@ -35,7 +35,7 @@ class ProcessImages(object):
                     images.append((number_id, os.path.join(files, image_file)))
         return images
 
-    def load_images(self, folder_base, channels=None):
+    def images_to_dataset(self, folder_base, channels=None):
         images = self.images_from_directories(folder_base)
         max_num_images = len(images)
         if channels is None:
@@ -52,7 +52,7 @@ class ProcessImages(object):
             if image_data.shape != dim:
                 raise Exception('Unexpected image shape: %s' % str(image_data.shape))
             image_data = image_data.astype(float)
-            self.dataset[image_index] = image_data#preprocessing.scale(image_data)
+            self.dataset[image_index] = preprocessing.scale(image_data)#image_data
             self.labels.append(number_id)
         print 'Full dataset tensor:', self.dataset.shape
         print 'Mean:', np.mean(self.dataset)
@@ -65,24 +65,19 @@ class ProcessImages(object):
         shuffled_labels = labels[permutation]
         return shuffled_dataset, shuffled_labels
 
-    def cross_validators(self, dataset, labels, train_size=0.6, valid_size=0.1):
+    def cross_validators(self, dataset, labels, train_size=0.7, valid_size=0.1):
         from sklearn import cross_validation
         X_train, X_test, y_train, y_test = cross_validation.train_test_split(
             dataset, labels, train_size=train_size, random_state=0)
 
-        test_size = 1 - train_size - valid_size
-        if 0 < test_size < 1:
-            test_size_proportion = test_size / (test_size + valid_size)
-            test_size_index = X_test.shape[0] * test_size_proportion
-        else:
-            raise Exception
-        X_validation = X_test[test_size_index:]
-        y_validation = y_test[int(test_size_index):]
-        X_test = X_test[:test_size_index]
-        y_test = y_test[:int(test_size_index)]        
+        valid_size_index = int(round(X_train.shape[0] * valid_size))
+        X_validation = X_train[:valid_size_index]
+        y_validation = y_train[:valid_size_index]
+        X_train = X_train[valid_size_index:]
+        y_train = y_train[valid_size_index:]
         return X_train, X_validation, X_test, y_train, y_validation, y_test
 
-    def save_dataset(self, name, valid_size=.1, train_size=.6):
+    def save_dataset(self, name, valid_size=.1, train_size=.7):
         train_dataset, valid_dataset, test_dataset, train_labels, valid_labels, test_labels = self.cross_validators(self.dataset, self.labels, train_size=train_size, valid_size=valid_size)
         try:
             f = open(DATASET_PATH+name, 'wb')
@@ -107,9 +102,9 @@ class ProcessImages(object):
     def load_dataset(self, name):
         with open(DATASET_PATH+name, 'rb') as f:
             save = pickle.load(f)
-            print('Training set', save['train_dataset'].shape, len(save['train_labels']))
-            print('Validation set', save['valid_dataset'].shape, len(save['valid_labels']))
-            print('Test set', save['test_dataset'].shape, len(save['test_labels']))
+            print('Training set DS[{}], labels[{}]'.format(save['train_dataset'].shape, len(save['train_labels'])))
+            print('Validation set DS[{}], labels[{}]'.format(save['valid_dataset'].shape, len(save['valid_labels'])))
+            print('Test set DS[{}], labels[{}]'.format(save['test_dataset'].shape, len(save['test_labels'])))
             return save
 
     def process_images(self, gray=True, blur=True):
@@ -441,6 +436,8 @@ class ConvTensor(TfLTensor):
         self.num_channels = kwargs.get("num_channels", 1)
         self.patch_size = 3
         self.depth = 32
+        if "num_channels" in kwargs:
+            del kwargs["num_channels"]
         super(ConvTensor, self).__init__(*args, **kwargs)
 
     def transform_img(self, img):
