@@ -66,9 +66,9 @@ def get_faces(images, number_id=None, image_align=True):
     return align.process(images, save_path=save_path)
 
 
-def rebuild_dataset(url, image_align=True):
-    from face_training import ProcessImages
-    p = ProcessImages(90)
+def rebuild_dataset(url, image_size, image_align=True):
+    from face_training import ProcessImages, FACE_TEST_FOLDER_PATH
+    p = ProcessImages(image_size)
     images_path = p.images_from_directories(url)
     images = []
     labels = []
@@ -127,26 +127,25 @@ def build_train_test_img(process_images, sample=True):
     import random
     images = {}
     images_index = {}
-    for number_id, images in process_images:
+    for i, (number_id, image_array) in enumerate(process_images):
         images.setdefault(number_id, [])
-        images_index.setdefault(number_id, [])
-        for i, image in enumerate(images):
-            images[number_id].append(image)
-            images_index[number_id].append(i)
+        images[number_id].append(image_array)
 
     if sample is True:
-        sample = {}
-        sample_index = {}
+        sample_data = {}
         for number_id in images:
-            indexes = random.sample(images_index[number_id], 3)
-            sample[number_id] = [images[number_id][index] for index in indexes]
-            sample_index[number_id] = indexes
+            base_indexes = set(range(len(images[number_id])))
+            sample_indexes = set(random.sample(base_indexes, 3))
+            sample_data[number_id] = [images[number_id][index] for index in sample_indexes]
+            images_index[number_id] = base_indexes.difference(sample_indexes)
         
-        for number_id, paths in sample.items():
-            for path in paths:
-                if path in images[number_id]:
-                    images[number_id].remove(path)
-        return images, sample
+        images_good = {}
+        for number_id, indexes in images_index.items():
+            images_good.setdefault(number_id, [])
+            for index in indexes:
+                images_good[number_id].append(images[number_id][index])
+        
+        return images_good, sample_data
     else:
         return images, {}
 
@@ -175,7 +174,7 @@ if __name__  == '__main__':
     elif args.build:
         build_dataset(dataset_name, "/home/sc/Pictures/face/", image_size)
     elif args.rebuild:
-        rebuild_dataset("/home/sc/Pictures/face_o/", image_align=True)
+        rebuild_dataset("/home/sc/Pictures/face_o/", image_size, image_align=True)
         build_dataset(dataset_name, "/home/sc/Pictures/face_t/", image_size, channels=None)
     else:        
         classifs = {
