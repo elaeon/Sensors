@@ -7,7 +7,7 @@ import dlib
 from skimage import io as sio
 
 import argparse
-#import face_training
+import face_training
 import align_image
 
 # Accept a single connection and make a file-like object out of it
@@ -53,7 +53,6 @@ def draw():
 
 
 def get_faces(images, number_id=None, image_align=True):
-    from face_training import FACE_ORIGINAL_PATH
     dlibFacePredictor = "/home/sc/dlib-18.18/python_examples/shape_predictor_68_face_landmarks.dat"
     if image_align is True:
         align = align_image.FaceAlign(dlibFacePredictor)
@@ -62,13 +61,12 @@ def get_faces(images, number_id=None, image_align=True):
     if number_id is None:
         save_path = None
     else:
-        save_path = (number_id, FACE_ORIGINAL_PATH)
+        save_path = (number_id, face_training.FACE_ORIGINAL_PATH)
     return align.process(images, save_path=save_path)
 
 
 def rebuild_dataset(url, image_size, image_align=True):
-    from face_training import ProcessImages, FACE_TEST_FOLDER_PATH
-    p = ProcessImages(image_size)
+    p = face_training.ProcessImages(image_size)
     images_path = p.images_from_directories(url)
     images = []
     labels = []
@@ -82,7 +80,7 @@ def rebuild_dataset(url, image_size, image_align=True):
         p_images.save_images("/home/sc/Pictures/face_t/", number_id, images)
 
     for number_id, images in image_test.items():
-        p_images.save_images(FACE_TEST_FOLDER_PATH, number_id, images)
+        p_images.save_images(face_training.FACE_TEST_FOLDER_PATH, number_id, images)
 
 
 def process_face(url, number_id):
@@ -100,25 +98,24 @@ def detect_face(face_classif):
         print(max(counter.items(), key=lambda x: x[1]))
 
 
-def detect_face_set(face_classif):
+def detect_face_test(face_classif, image_size=90):
     import os
     import numpy as np
-
-    images = os.listdir(face_training.FACE_TEST_FOLDER_PATH)
+    
+    p = face_training.ProcessImages(image_size)
+    images_path = p.images_from_directories(face_training.FACE_TEST_FOLDER_PATH)
     images_data = []
     labels = []
-    for image in images:
-        image_file = os.path.join(face_training.FACE_TEST_FOLDER_PATH, image)
-        images_data.append(sio.imread(image_file))
-        labels.append(image.split("-")[1])
+    for number_id, path in images_path:
+        images_data.append(sio.imread(path))
+        labels.append(number_id)
     
     predictions = face_classif.predict_set(images_data)
     face_classif.accuracy(list(predictions), np.asarray(labels))
 
 
 def build_dataset(name, directory, image_size, channels=None):
-    from face_training import ProcessImages
-    p = ProcessImages(image_size)
+    p = face_training.ProcessImages(image_size)
     p.images_to_dataset(directory, channels=channels)
     p.save_dataset(name)
 
@@ -155,7 +152,7 @@ if __name__  == '__main__':
     parser.add_argument("--empleado", help="numero de empleado", type=int)
     parser.add_argument("--foto", help="numero de empleado", action="store_true")
     parser.add_argument("--dataset", help="nombre del dataset a utilizar", type=str)
-    parser.add_argument("--set", 
+    parser.add_argument("--test", 
         help="predice los datos con el dataset como base de conocimiento", 
         action="store_true")
     parser.add_argument("--build", help="crea el dataset", action="store_true")
@@ -201,8 +198,8 @@ if __name__  == '__main__':
         print("#########", face_classif.__class__.__name__)
         if args.foto:                  
             detect_face(face_classif)
-        elif args.set:
-            detect_face_set(face_classif)
+        elif args.test:
+            detect_face_test(face_classif)
         elif args.train:
             face_classif.fit()
             face_classif.train(num_steps=50)
