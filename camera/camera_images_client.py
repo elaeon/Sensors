@@ -124,9 +124,14 @@ def build_train_test_img(process_images, sample=True):
     import random
     images = {}
     images_index = {}
-    for i, (number_id, image_array) in enumerate(process_images):
-        images.setdefault(number_id, [])
-        images[number_id].append(image_array)
+    
+    try:
+        for i, (number_id, image_array) in enumerate(process_images):
+            images.setdefault(number_id, [])
+            images[number_id].append(image_array)
+    except TypeError:
+        #if no faces are detected
+        return {}, {}
 
     if sample is True:
         sample_data = {}
