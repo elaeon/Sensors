@@ -77,7 +77,7 @@ def rebuild_dataset(url, image_size, image_align=True):
     image_train, image_test = build_train_test_img(zip(labels, p_images.process_images(gray=True, blur=True)))
 
     for number_id, images in image_train.items():
-        p_images.save_images("/home/sc/Pictures/face_t/", number_id, images)
+        p_images.save_images(face_training.FACE_FOLDER_PATH, number_id, images)
 
     for number_id, images in image_test.items():
         p_images.save_images(face_training.FACE_TEST_FOLDER_PATH, number_id, images)
@@ -135,13 +135,16 @@ def build_train_test_img(process_images, sample=True):
 
     if sample is True:
         sample_data = {}
+        images_good = {}
         for number_id in images:
             base_indexes = set(range(len(images[number_id])))
-            sample_indexes = set(random.sample(base_indexes, 3))
+            if len(base_indexes) > 3:
+                sample_indexes = set(random.sample(base_indexes, 3))
+            else:
+                sample_indexes = set([])
             sample_data[number_id] = [images[number_id][index] for index in sample_indexes]
             images_index[number_id] = base_indexes.difference(sample_indexes)
-        
-        images_good = {}
+
         for number_id, indexes in images_index.items():
             images_good.setdefault(number_id, [])
             for index in indexes:
@@ -177,7 +180,7 @@ if __name__  == '__main__':
         build_dataset(dataset_name, "/home/sc/Pictures/face/", image_size)
     elif args.rebuild:
         rebuild_dataset("/home/sc/Pictures/face_o/", image_size, image_align=True)
-        build_dataset(dataset_name, "/home/sc/Pictures/face_t/", image_size, channels=None)
+        build_dataset(dataset_name, "/home/sc/Pictures/face/", image_size, channels=None)
     else:        
         classifs = {
             "svc": {
