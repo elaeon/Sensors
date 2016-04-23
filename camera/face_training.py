@@ -21,9 +21,12 @@ class ProcessImages(object):
     def __init__(self, image_size):
         self.image_size = image_size
         self.images = []
+        self.dataset = None
+        self.labels = None
 
     def add_img(self, img):
         self.images.append(img)
+        #self.dataset.append(img)
 
     def images_from_directories(self, folder_base):
         images = []
@@ -35,7 +38,7 @@ class ProcessImages(object):
                     images.append((number_id, os.path.join(files, image_file)))
         return images
 
-    def images_to_dataset(self, folder_base, channels=None):
+    def images_to_dataset(self, folder_base):
         images = self.images_from_directories(folder_base)
         max_num_images = len(images)
         if channels is None:
@@ -46,7 +49,7 @@ class ProcessImages(object):
             self.dataset = np.ndarray(
                 shape=(max_num_images, self.image_size, self.image_size, channels), dtype=np.float32)
             dim = (self.image_size, self.image_size, channels)
-        self.labels = []
+        self.labels = np.ndarray(shape=(max_num_images,))
         for image_index, (number_id, image_file) in enumerate(images):
             image_data = sio.imread(image_file)
             if image_data.shape != dim:
@@ -57,7 +60,7 @@ class ProcessImages(object):
         print 'Full dataset tensor:', self.dataset.shape
         print 'Mean:', np.mean(self.dataset)
         print 'Standard deviation:', np.std(self.dataset)
-        print 'Labels:', len(self.labels)
+        print 'Labels:', self.labels.shape
 
     def randomize(self, dataset, labels):
         permutation = np.random.permutation(labels.shape[0])
@@ -123,6 +126,23 @@ class ProcessImages(object):
             except ValueError:
                 pass
 
+    def merge_offset(self, image):
+        import random
+        bg = np.ones((self.image_size, self.image_size))
+        offset = (int(round(abs(bg.shape[0] - image.shape[0]) / 2)), 
+                int(round(abs(bg.shape[1] - image.shape[1]) / 2)))
+        pos_v, pos_h = offset
+        v_range1 = slice(max(0, pos_v), max(min(pos_v + image.shape[0], bg.shape[0]), 0))
+        h_range1 = slice(max(0, pos_h), max(min(pos_h + image.shape[1], bg.shape[1]), 0))
+        v_range2 = slice(max(0, -pos_v), min(-pos_v + bg.shape[0], image.shape[0]))
+        h_range2 = slice(max(0, -pos_h), min(-pos_h + bg.shape[1], image.shape[1]))
+        bg2 = bg - 1 + np.average(image) + random.uniform(-np.var(image), np.var(image))
+        #print(np.std(image))
+        #print(np.var(image))
+        bg2[v_range1, h_range1] = bg[v_range1, h_range1] - 1
+        bg2[v_range1, h_range1] = bg2[v_range1, h_range1] + image[v_range2, h_range2]
+        return bg2
+
     def save_images(self, url, number_id, images):
         if not os.path.exists(url):
             os.makedirs(url)
@@ -131,6 +151,75 @@ class ProcessImages(object):
              os.makedirs(n_url)
         for i, image in enumerate(images):
             sio.imsave("{}face-{}-{}.png".format(n_url, number_id, i), image)
+
+class DataSetBuilder(object):
+    def detect_face_test(self, face_classif, image_size=90):
+        p = ProcessImages(image_size)
+        images_path = p.images_from_directories(face_training.FACE_TEST_FOLDER_PATH)
+        images_data = []
+        labels = []
+        for number_id, path in images_path:
+            images_data.append(sio.imread(path))
+            labels.append(number_id)
+        
+        predictions = face_classif.predict_set(images_data)
+        face_classif.accuracy(list(predictions), np.asarray(labels))
+
+    def build_dataset(self, name, directory, image_size, channels=None):
+        p = ProcessImages(image_size)
+        p.images_to_dataset(directory, channels=channels)
+        p.save_dataset(name)
+
+    def rebuild_dataset(self, url, image_size, image_align=True):
+        p = ProcessImages(image_size)
+        images_path = p.images_from_directories(url)
+        images = []
+        labels = []
+        for number_id, image_file in images_path:
+            images.append(sio.imread(image_file))
+            labels.append(number_id)
+        p_images = get_faces(images, image_align=image_align)
+        image_train, image_test = self.build_train_test(zip(labels, p_images.process_images(gray=True, blur=True)))
+
+        for number_id, images in image_train.items():
+            p_images.save_images(face_training.FACE_FOLDER_PATH, number_id, images)
+
+        for number_id, images in image_test.items():
+            p_images.save_images(face_training.FACE_TEST_FOLDER_PATH, number_id, images)
+
+    def build_train_test(self, process_images, sample=True):
+        import random
+        images = {}
+        images_index = {}
+        
+        try:
+            for i, (number_id, image_array) in enumerate(process_images):
+                images.setdefault(number_id, [])
+                images[number_id].append(image_array)
+        except TypeError:
+            #if no faces are detected
+            return {}, {}
+
+        if sample is True:
+            sample_data = {}
+            images_good = {}
+            for number_id in images:
+                base_indexes = set(range(len(images[number_id])))
+                if len(base_indexes) > 3:
+                    sample_indexes = set(random.sample(base_indexes, 3))
+                else:
+                    sample_indexes = set([])
+                sample_data[number_id] = [images[number_id][index] for index in sample_indexes]
+                images_index[number_id] = base_indexes.difference(sample_indexes)
+
+            for number_id, indexes in images_index.items():
+                images_good.setdefault(number_id, [])
+                for index in indexes:
+                    images_good[number_id].append(images[number_id][index])
+            
+            return images_good, sample_data
+        else:
+            return images, {}
 
 class Measure(object):
     def __init__(self, predictions, labels):
