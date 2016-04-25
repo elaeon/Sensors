@@ -18,11 +18,16 @@ DATASET_PATH = "/home/sc/data/dataset/"
 np.random.seed(133)
 
 class ProcessImages(object):
-    def __init__(self, image_size):
+    def __init__(self, image_size, channels=None, dataset_path=None):
         self.image_size = image_size
         self.images = []
         self.dataset = None
         self.labels = None
+        self.channels = channels
+        if dataset_path is None:
+            self.dataset_path = DATASET_PATH
+        else:
+            self.dataset_path = dataset_path
 
     def add_img(self, img):
         self.images.append(img)
@@ -41,15 +46,15 @@ class ProcessImages(object):
     def images_to_dataset(self, folder_base):
         images = self.images_from_directories(folder_base)
         max_num_images = len(images)
-        if channels is None:
+        if self.channels is None:
             self.dataset = np.ndarray(
                 shape=(max_num_images, self.image_size, self.image_size), dtype=np.float32)
             dim = (self.image_size, self.image_size)
         else:
             self.dataset = np.ndarray(
-                shape=(max_num_images, self.image_size, self.image_size, channels), dtype=np.float32)
-            dim = (self.image_size, self.image_size, channels)
-        self.labels = np.ndarray(shape=(max_num_images,))
+                shape=(max_num_images, self.image_size, self.image_size, self.channels), dtype=np.float32)
+            dim = (self.image_size, self.image_size, self.channels)
+        self.labels = []
         for image_index, (number_id, image_file) in enumerate(images):
             image_data = sio.imread(image_file)
             if image_data.shape != dim:
@@ -60,7 +65,7 @@ class ProcessImages(object):
         print 'Full dataset tensor:', self.dataset.shape
         print 'Mean:', np.mean(self.dataset)
         print 'Standard deviation:', np.std(self.dataset)
-        print 'Labels:', self.labels.shape
+        print 'Labels:', len(self.labels)
 
     def randomize(self, dataset, labels):
         permutation = np.random.permutation(labels.shape[0])
@@ -83,7 +88,7 @@ class ProcessImages(object):
     def save_dataset(self, name, valid_size=.1, train_size=.7):
         train_dataset, valid_dataset, test_dataset, train_labels, valid_labels, test_labels = self.cross_validators(self.dataset, self.labels, train_size=train_size, valid_size=valid_size)
         try:
-            f = open(DATASET_PATH+name, 'wb')
+            f = open(self.dataset_path+name, 'wb')
             save = {
                 'train_dataset': train_dataset,
                 'train_labels': train_labels,
@@ -95,15 +100,15 @@ class ProcessImages(object):
             pickle.dump(save, f, pickle.HIGHEST_PROTOCOL)
             f.close()
         except Exception as e:
-            print('Unable to save data to: ', DATASET_PATH+name, e)
+            print('Unable to save data to: ', self.dataset_path+name, e)
             raise
 
         print("Test set: {}, Valid set: {}, Training set: {}".format(
             len(test_labels), len(valid_labels), len(train_labels)))
 
     @classmethod
-    def load_dataset(self, name):
-        with open(DATASET_PATH+name, 'rb') as f:
+    def load_dataset(self, name, dataset_path=DATASET_PATH):
+        with open(dataset_path+name, 'rb') as f:
             save = pickle.load(f)
             print('Training set DS[{}], labels[{}]'.format(save['train_dataset'].shape, len(save['train_labels'])))
             print('Validation set DS[{}], labels[{}]'.format(save['valid_dataset'].shape, len(save['valid_labels'])))
@@ -153,9 +158,17 @@ class ProcessImages(object):
             sio.imsave("{}face-{}-{}.png".format(n_url, number_id, i), image)
 
 class DataSetBuilder(object):
-    def detect_face_test(self, face_classif, image_size=90):
-        p = ProcessImages(image_size)
-        images_path = p.images_from_directories(face_training.FACE_TEST_FOLDER_PATH)
+    def __init__(self, image_size, dataset_path=None, 
+                test_folder_path=FACE_TEST_FOLDER_PATH, 
+                train_folder_path=FACE_FOLDER_PATH):
+        self.image_size = image_size
+        self.test_folder_path = test_folder_path
+        self.train_folder_path = train_folder_path
+        self.dataset_path = dataset_path
+
+    def detector_test(self, face_classif):
+        p = ProcessImages(self.image_size)
+        images_path = p.images_from_directories(self.test_folder_path)
         images_data = []
         labels = []
         for number_id, path in images_path:
@@ -165,27 +178,27 @@ class DataSetBuilder(object):
         predictions = face_classif.predict_set(images_data)
         face_classif.accuracy(list(predictions), np.asarray(labels))
 
-    def build_dataset(self, name, directory, image_size, channels=None):
-        p = ProcessImages(image_size)
-        p.images_to_dataset(directory, channels=channels)
+    def build_dataset(self, name, directory, channels=None):
+        p = ProcessImages(self.image_size, channels=channels, dataset_path=self.dataset_path)
+        p.images_to_dataset(directory)
         p.save_dataset(name)
 
-    def rebuild_dataset(self, url, image_size, image_align=True):
-        p = ProcessImages(image_size)
+    def rebuild_images(self, url, images_generator, image_align=True):
+        p = ProcessImages(self.image_size, dataset_path=self.dataset_path)
         images_path = p.images_from_directories(url)
         images = []
         labels = []
         for number_id, image_file in images_path:
             images.append(sio.imread(image_file))
             labels.append(number_id)
-        p_images = get_faces(images, image_align=image_align)
+        p_images = images_generator(images, image_align=image_align)
         image_train, image_test = self.build_train_test(zip(labels, p_images.process_images(gray=True, blur=True)))
 
         for number_id, images in image_train.items():
-            p_images.save_images(face_training.FACE_FOLDER_PATH, number_id, images)
+            p_images.save_images(self.train_folder_path, number_id, images)
 
         for number_id, images in image_test.items():
-            p_images.save_images(face_training.FACE_TEST_FOLDER_PATH, number_id, images)
+            p_images.save_images(self.test_folder_path, number_id, images)
 
     def build_train_test(self, process_images, sample=True):
         import random
@@ -259,12 +272,12 @@ class Measure(object):
         print("#############")
 
 class BasicFaceClassif(object):
-    def __init__(self, model_name, image_size=90):
+    def __init__(self, model_name, dataset, image_size=90):
         self.image_size = image_size
         self.model_name = model_name
         self.model = None
         self.le = preprocessing.LabelEncoder()
-        self.load_dataset()
+        self.load_dataset(dataset)
 
     def reformat(self, dataset, labels):
         dataset = dataset.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
@@ -299,20 +312,19 @@ class BasicFaceClassif(object):
         measure.print_all()
         return measure.accuracy()
 
-    def load_dataset(self):
-        data = ProcessImages.load_dataset(self.model_name)
-        self.train_dataset = data['train_dataset']
-        self.train_labels = data['train_labels']
-        self.valid_dataset = data['valid_dataset']
-        self.valid_labels = data['valid_labels']
-        self.test_dataset = data['test_dataset']
-        self.test_labels = data['test_labels']
+    def load_dataset(self, dataset):
+        self.train_dataset = dataset['train_dataset']
+        self.train_labels = dataset['train_labels']
+        self.valid_dataset = dataset['valid_dataset']
+        self.valid_labels = dataset['valid_labels']
+        self.test_dataset = dataset['test_dataset']
+        self.test_labels = dataset['test_labels']
         self.reformat_all()
-        del data
 
 class SVCFace(BasicFaceClassif):
-    def __init__(self, model_name, image_size=90):
-        super(SVCFace, self).__init__(model_name, image_size=image_size)
+    def __init__(self, model_name, dataset, image_size=90, check_point_path=CHECK_POINT_PATH):
+        super(SVCFace, self).__init__(model_name, dataset, image_size=image_size)
+        self.check_point_path = check_point_path
 
     def fit(self):
         #from sklearn.linear_model import LogisticRegression
@@ -344,18 +356,18 @@ class SVCFace(BasicFaceClassif):
 
     def save_model(self):
         from sklearn.externals import joblib
-        joblib.dump(self.model, '{}.pkl'.format(CHECK_POINT_PATH+self.model_name)) 
+        joblib.dump(self.model, '{}.pkl'.format(self.check_point_path+self.model_name)) 
 
     def load_model(self):
         from sklearn.externals import joblib
-        self.model = joblib.load('{}.pkl'.format(CHECK_POINT_PATH+self.model_name))
+        self.model = joblib.load('{}.pkl'.format(self.check_point_path+self.model_name))
 
 
 class BasicTensor(BasicFaceClassif):
-    def __init__(self, model_name, batch_size=None, image_size=90):
+    def __init__(self, model_name, batch_size=None, image_size=90, check_point_path=CHECK_POINT_PATH):
         super(BasicTensor, self).__init__(model_name, image_size=image_size)
         self.batch_size = batch_size
-        self.check_point = CHECK_POINT_PATH + self.__class__.__name__ + "/"
+        self.check_point = check_point_path + self.__class__.__name__ + "/"
 
     def reformat(self, dataset, labels):
         dataset = self.transform_img(dataset)

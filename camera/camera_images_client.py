@@ -66,7 +66,7 @@ def get_faces(images, number_id=None, image_align=True):
 
 
 def process_face(url, number_id):
-    d = face_training.DataSetBuilder()
+    d = face_training.DataSetBuilder(90)
     p_images = get_faces(read(num_images=20), number_id)
     images, _ = d.build_train_test((number_id, p_images.process_images(gray=True, blur=True)), sample=False)
     p_images.save_images(url, number_id, images.values())
@@ -103,12 +103,12 @@ if __name__  == '__main__':
     if args.empleado:
         process_face("/home/sc/Pictures/face/", args.empleado)
     elif args.build:
-        d = face_training.DataSetBuilder()
-        d.build_dataset(dataset_name, "/home/sc/Pictures/face/", image_size)
+        d = face_training.DataSetBuilder(90)
+        d.build_dataset(dataset_name, "/home/sc/Pictures/face/")
     elif args.rebuild:
-        d = face_training.DataSetBuilder()
-        d.rebuild_dataset("/home/sc/Pictures/face_o/", image_size, image_align=True)
-        d.build_dataset(dataset_name, "/home/sc/Pictures/face/", image_size, channels=None)
+        d = face_training.DataSetBuilder(90)
+        d.rebuild_images("/home/sc/Pictures/face_o/", get_faces, image_align=True)
+        d.build_dataset(dataset_name, "/home/sc/Pictures/face/")
     else:        
         classifs = {
             "svc": {
@@ -135,7 +135,8 @@ if __name__  == '__main__':
         if args.foto:                  
             detect_face(face_classif)
         elif args.test:
-            detect_face_test(face_classif)
+            d = face_training.DataSetBuilder(90)
+            d.detector_test(face_classif)
         elif args.train:
             face_classif.fit()
             face_classif.train(num_steps=50)
