@@ -3,7 +3,7 @@ import dlib
 from skimage import io
 import os
 import numpy as np
-from face_training import ProcessImages
+from face_training import DataSetBuilder
 
 TEMPLATE = np.float32([
     (0.0792396913815, 0.339223741112), (0.0829219487236, 0.456955367943),
@@ -114,7 +114,7 @@ class DetectorDlib:
         return thumbnail
 
     def process(self, images, save_path=None):
-        p = ProcessImages(image_size=self.image_size)
+        ds_builder = DataSetBuilder("", self.image_size)
 
         win = dlib.image_window()
         images_b = []
@@ -127,13 +127,13 @@ class DetectorDlib:
 
             if out_img is not None:
                 #outBgr = cv2.cvtColor(outRgb, cv2.COLOR_RGB2BGR)
-                p.add_img(out_img)
+                ds_builder.add_img(out_img)
             images_b.append(img)
 
         if save_path is not None:
             number_id, path = save_path
-            p.save_images(path, number_id, images_b)
-        return p
+            ds_builder.save_images(path, number_id, images_b)
+        return ds_builder
 
 class FaceAlign(DetectorDlib):
     """
@@ -193,7 +193,7 @@ class FaceAlign(DetectorDlib):
     def process(self, images, save_path=None):
         landmarkIndices = self.OUTER_EYES_AND_NOSE
         landmarkIndices = self.INNER_EYES_AND_BOTTOM_LIP
-        p = ProcessImages(image_size=self.image_size)
+        ds_builder = DataSetBuilder("-", self.image_size)
 
         win = dlib.image_window()
         images_b = []
@@ -208,13 +208,13 @@ class FaceAlign(DetectorDlib):
 
             if out_img is not None:
                 #outBgr = cv2.cvtColor(outRgb, cv2.COLOR_RGB2BGR)
-                p.add_img(out_img)
+                ds_builder.add_img(out_img)
             images_b.append(img)
 
         if save_path is not None:
             number_id, path = save_path
-            p.save_images(path, number_id, images_b)
-        return p
+            ds_builder.save_images(path, number_id, images_b)
+        return ds_builder
 
 if __name__ == '__main__':
     dlibFacePredictor = "/home/sc/dlib-18.18/python_examples/shape_predictor_68_face_landmarks.dat"

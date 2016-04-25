@@ -65,18 +65,18 @@ def get_faces(images, number_id=None, image_align=True):
     return align.process(images, save_path=save_path)
 
 
-def process_face(url, number_id):
-    d = face_training.DataSetBuilder(90)
-    p_images = get_faces(read(num_images=20), number_id)
-    images, _ = d.build_train_test((number_id, p_images.process_images(gray=True, blur=True)), sample=False)
-    p_images.save_images(url, number_id, images.values())
-
+def build_images_face(url, number_id):
+    #ds_builder = face_training.DataSetBuilder(90)
+    ds_builder = get_faces(read(num_images=20), number_id)
+    images, _ = ds_builder.build_train_test(
+        (number_id, ds_builder.process_images(gray=True, blur=True)), sample=False)
+    ds_builder.save_images(url, number_id, images.values())
 
 def detect_face(face_classif):
     from collections import Counter
 
-    p_images = get_faces(read(num_images=20), image_align=True)
-    counter = Counter(face_classif.predict_set(p_images.process_images(gray=True, blur=True)))
+    ds_builder = get_faces(read(num_images=20), image_align=True)
+    counter = Counter(face_classif.predict_set(ds_builder.process_images(gray=True, blur=True)))
     if len(counter) > 0:
         print(max(counter.items(), key=lambda x: x[1]))
 
@@ -101,14 +101,14 @@ if __name__  == '__main__':
         dataset_name = "test_5"
 
     if args.empleado:
-        process_face("/home/sc/Pictures/face/", args.empleado)
+        build_images_face("/home/sc/Pictures/face/", args.empleado)
     elif args.build:
-        d = face_training.DataSetBuilder(90)
-        d.build_dataset(dataset_name, "/home/sc/Pictures/face/")
+        ds_builder = face_training.DataSetBuilder(dataset_name, 90)
+        ds_builder.build_dataset("/home/sc/Pictures/face/")
     elif args.rebuild:
-        d = face_training.DataSetBuilder(90)
-        d.rebuild_images("/home/sc/Pictures/face_o/", get_faces, image_align=True)
-        d.build_dataset(dataset_name, "/home/sc/Pictures/face/")
+        ds_builder = face_training.DataSetBuilder(dataset_name, 90)
+        ds_builder.original_to_images_set("/home/sc/Pictures/face_o/", get_faces, image_align=True)
+        ds_builder.build_dataset("/home/sc/Pictures/face/")
     else:        
         classifs = {
             "svc": {
@@ -129,7 +129,8 @@ if __name__  == '__main__':
         }
         class_ = classifs[args.classif]["name"]
         params = classifs[args.classif]["params"]
-        face_classif = class_(dataset_name, **params)
+        dataset = face_training.DataSetBuilder.load_dataset(dataset_name)
+        face_classif = class_(dataset_name, dataset, **params)
         face_classif.batch_size = 10
         print("#########", face_classif.__class__.__name__)
         if args.foto:                  
