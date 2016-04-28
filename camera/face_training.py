@@ -150,6 +150,7 @@ class DataSetBuilder(object):
         bg2[v_range1, h_range1] = bg2[v_range1, h_range1] + image[v_range2, h_range2]
         return bg2
 
+    @classmethod
     def save_images(self, url, number_id, images):
         if not os.path.exists(url):
             os.makedirs(url)
