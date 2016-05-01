@@ -273,6 +273,10 @@ class BasicFaceClassif(object):
         self.le = preprocessing.LabelEncoder()
         self.load_dataset(dataset)
 
+    def detector_test_dataset(self):
+        predictions = self.predict_set(self.test_dataset)
+        self.accuracy(list(predictions), np.asarray([self.convert_label(label) for label in self.test_labels]))
+
     def reformat(self, dataset, labels):
         dataset = dataset.reshape((-1, self.image_size * self.image_size)).astype(np.float32)
         return dataset, labels
@@ -452,7 +456,7 @@ class TensorFace(BasicTensor):
         super(TensorFace, self).__init__(*args, **kwargs)
 
     def position_index(self, label):
-        return np.argmax(label, 1)[0]
+        return np.argmax(label)#[0]
 
     def predict_set(self, imgs):
         self.batch_size = 1
