@@ -17,6 +17,40 @@ DATASET_PATH = "/home/sc/data/dataset/"
 
 np.random.seed(133)
 
+import align_image
+
+class ProcessImage(object):
+    def __init__(self, image, commands):
+        self.image = image
+        self.pipeline(commands)
+
+    def resize(self, image_size):
+        if (self.image_size, self.image_size) < image.shape or\
+                    image.shape < (self.image_size, self.image_size):
+            self.image = transform.resize(self.image, (image_size, image_size))
+        
+    def rdb2gray(self):
+        self.image = color.rgb2gray(self.image)
+
+    def blur(self, level):
+        self.image = filters.gaussian(self.image, level)
+
+    def align_face(self):
+        dlibFacePredictor = "/home/sc/dlib-18.18/python_examples/shape_predictor_68_face_landmarks.dat"
+        align = align_image.FaceAlign(dlibFacePredictor)
+        self.image = align.process_img(self.image)
+
+    def detector(self):
+        dlibFacePredictor = "/home/sc/dlib-18.18/python_examples/shape_predictor_68_face_landmarks.dat"
+        align = align_image.DetectorDlib(dlibFacePredictor)
+        self.image = align.process_img(self.image)
+
+    def pipeline(commands):
+        for command, values in commands:
+            if value is not None:
+                getattr(self, command)(value)
+
+
 class DataSetBuilder(object):
     def __init__(self, name, image_size, channels=None, dataset_path=DATASET_PATH, 
                 test_folder_path=FACE_TEST_FOLDER_PATH, 
@@ -117,21 +151,21 @@ class DataSetBuilder(object):
             print('Test set DS[{}], labels[{}]'.format(save['test_dataset'].shape, len(save['test_labels'])))
             return save
 
-    def process_images(self, gray=True, blur=True):
-        for image in self.images:
-            try:
-                if gray is True:
-                    image = color.rgb2gray(image)
+    #def process_images(self, gray=True, blur=True):
+    #    for image in self.images:
+    #        try:
+    #            if gray is True:
+    #                image = color.rgb2gray(image)
 
-                if (self.image_size, self.image_size) < image.shape or\
-                    image.shape < (self.image_size, self.image_size):
-                    image = transform.resize(image, (self.image_size, self.image_size))
-                    print("Resized")
-                if blur is True:
-                    image = filters.gaussian(image, .5)
-                yield image
-            except ValueError:
-                pass
+    #            if (self.image_size, self.image_size) < image.shape or\
+    #                image.shape < (self.image_size, self.image_size):
+    #                image = transform.resize(image, (self.image_size, self.image_size))
+    #                print("Resized")
+    #            if blur is True:
+    #                image = filters.gaussian(image, .5)
+    #            yield image
+    #        except ValueError:
+    #            pass
 
     def merge_offset(self, image):
         import random
@@ -183,16 +217,16 @@ class DataSetBuilder(object):
         self.images_to_dataset(from_directory)
         self.save_dataset()
 
-    def original_to_images_set(self, url, images_generator, image_align=True):
+    def original_to_images_set(self, url, commands):
         images_data, labels = self.labels_images(url)
-        p_images = images_generator(images_data, image_align=image_align)
-        image_train, image_test = self.build_train_test(zip(labels, p_images.process_images(gray=True, blur=True)))
+        images = (face_training.ProcessImage(image, commands).image for img in images_data)
+        image_train, image_test = self.build_train_test(zip(labels, images))
 
         for number_id, images in image_train.items():
-            p_images.save_images(self.train_folder_path, number_id, images)
+            self.save_images(self.train_folder_path, number_id, images)
 
         for number_id, images in image_test.items():
-            p_images.save_images(self.test_folder_path, number_id, images)
+            self.save_images(self.test_folder_path, number_id, images)
 
     def build_train_test(self, process_images, sample=True):
         import random
@@ -200,7 +234,7 @@ class DataSetBuilder(object):
         images_index = {}
         
         try:
-            for i, (number_id, image_array) in enumerate(process_images):
+            for number_id, image_array in process_images:
                 images.setdefault(number_id, [])
                 images[number_id].append(image_array)
         except TypeError:

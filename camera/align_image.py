@@ -135,6 +135,10 @@ class DetectorDlib:
             ds_builder.save_images(path, number_id, images_b)
         return ds_builder
 
+    def process_img(self, img):
+        return self.align(img)
+
+
 class FaceAlign(DetectorDlib):
     """
     Use `dlib's landmark estimation <http://blog.dlib.net/2014/08/real-time-face-pose-estimation.html>`_ to align faces.
@@ -215,6 +219,15 @@ class FaceAlign(DetectorDlib):
             number_id, path = save_path
             ds_builder.save_images(path, number_id, images_b)
         return ds_builder
+
+    def process_img(self, img):
+        landmarkIndices = self.OUTER_EYES_AND_NOSE
+        landmarkIndices = self.INNER_EYES_AND_BOTTOM_LIP
+
+        out_img = self.align(img, landmarkIndices=landmarkIndices)
+        if out_img is None:
+            print("  + Unable to align.")
+        return out_img
 
 if __name__ == '__main__':
     dlibFacePredictor = "/home/sc/dlib-18.18/python_examples/shape_predictor_68_face_landmarks.dat"
