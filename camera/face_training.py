@@ -5,6 +5,7 @@ from skimage import color
 from skimage import filters
 from skimage import transform
 from sklearn import preprocessing
+from skimage import img_as_ubyte
 
 import tensorflow as tf
 import cPickle as pickle
@@ -17,44 +18,47 @@ DATASET_PATH = "/home/sc/data/dataset/"
 
 np.random.seed(133)
 
-import align_image
 
 class ProcessImage(object):
-    def __init__(self, image, commands):
+    def __init__(self, image, filters):
         self.image = image
-        self.pipeline(commands)
+        self.pipeline(filters)
 
     def resize(self, image_size):
-        if (self.image_size, self.image_size) < image.shape or\
-                    image.shape < (self.image_size, self.image_size):
-            self.image = transform.resize(self.image, (image_size, image_size))
+        dim = (image_size, image_size)
+        if dim < self.image.shape or self.image.shape < dim:
+            self.image = transform.resize(self.image, dim)
         
-    def rdb2gray(self):
-        self.image = color.rgb2gray(self.image)
+    def rgb2gray(self):
+        self.image = img_as_ubyte(color.rgb2gray(self.image))
 
     def blur(self, level):
         self.image = filters.gaussian(self.image, level)
 
     def align_face(self):
+        import align_image
         dlibFacePredictor = "/home/sc/dlib-18.18/python_examples/shape_predictor_68_face_landmarks.dat"
         align = align_image.FaceAlign(dlibFacePredictor)
         self.image = align.process_img(self.image)
 
     def detector(self):
+        import align_image
         dlibFacePredictor = "/home/sc/dlib-18.18/python_examples/shape_predictor_68_face_landmarks.dat"
         align = align_image.DetectorDlib(dlibFacePredictor)
         self.image = align.process_img(self.image)
 
-    def pipeline(commands):
-        for command, values in commands:
+    def pipeline(self, commands):
+        for command, value in commands:
             if value is not None:
                 getattr(self, command)(value)
-
+            else:
+                getattr(self, command)()
 
 class DataSetBuilder(object):
     def __init__(self, name, image_size, channels=None, dataset_path=DATASET_PATH, 
                 test_folder_path=FACE_TEST_FOLDER_PATH, 
-                train_folder_path=FACE_FOLDER_PATH):
+                train_folder_path=FACE_FOLDER_PATH,
+                filters=None):
         self.image_size = image_size
         self.images = []
         self.dataset = None
@@ -64,6 +68,7 @@ class DataSetBuilder(object):
         self.train_folder_path = train_folder_path
         self.dataset_path = dataset_path
         self.name = name
+        self.filters = filters
 
     def add_img(self, img):
         self.images.append(img)
@@ -80,6 +85,7 @@ class DataSetBuilder(object):
         return images
 
     def images_to_dataset(self, folder_base):
+        """The loaded images must have been processed"""
         images = self.images_from_directories(folder_base)
         max_num_images = len(images)
         if self.channels is None:
@@ -217,9 +223,9 @@ class DataSetBuilder(object):
         self.images_to_dataset(from_directory)
         self.save_dataset()
 
-    def original_to_images_set(self, url, commands):
+    def original_to_images_set(self, url):
         images_data, labels = self.labels_images(url)
-        images = (face_training.ProcessImage(image, commands).image for img in images_data)
+        images = (ProcessImage(img, self.filters).image for img in images_data)
         image_train, image_test = self.build_train_test(zip(labels, images))
 
         for number_id, images in image_train.items():

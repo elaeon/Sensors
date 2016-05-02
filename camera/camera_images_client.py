@@ -67,15 +67,15 @@ def draw():
 
 def build_images_face(url, number_id):
     ds_builder = face_training.DataSetBuilder(90)
-    commands = [("rgb2gray", None), ("resize", 90), ("align_face", None)]
-    images = (face_training.ProcessImage(image, commands).image for img in read(num_images=20))
+    filters = [("rgb2gray", None), ("align_face", None), ("resize", 90)]
+    images = (face_training.ProcessImage(image, filters).image for img in read(num_images=20))
     images, _ = ds_builder.build_train_test((number_id, images), sample=False)
     ds_builder.save_images(url, number_id, images.values())
 
 def detect_face(face_classif):
     from collections import Counter
-    commands = [("rgb2gray", None), ("resize", 90), ("align_face", None)]
-    images = (face_training.ProcessImage(image, commands).image for img in read(num_images=20))
+    filters = [("rgb2gray", None), ("align_face", None), ("resize", 90)]
+    images = (face_training.ProcessImage(image, filters).image for img in read(num_images=20))
     counter = Counter(face_classif.predict_set(images))
     if len(counter) > 0:
         print(max(counter.items(), key=lambda x: x[1]))
@@ -103,12 +103,13 @@ if __name__  == '__main__':
     if args.empleado:
         build_images_face("/home/sc/Pictures/face/", args.empleado)
     elif args.build:
-        ds_builder = face_training.DataSetBuilder(dataset_name, 90)
-        ds_builder.build_dataset("/home/sc/Pictures/face/")
+        filters = [("rgb2gray", None), ("align_face", None), ("resize", 90)]
+        ds_builder = face_training.DataSetBuilder(dataset_name, 90, filters=filters)
+        ds_builder.build_dataset("/home/sc/Pictures/face/", filters)
     elif args.rebuild:
-        commands = [("rgb2gray", None), ("resize", 90), ("align_face", None)]
-        ds_builder = face_training.DataSetBuilder(dataset_name, 90)
-        ds_builder.original_to_images_set("/home/sc/Pictures/face_o/", commands)
+        filters = [("rgb2gray", None), ("align_face", None), ("resize", 90)]
+        ds_builder = face_training.DataSetBuilder(dataset_name, 90, filters=filters)
+        ds_builder.original_to_images_set("/home/sc/Pictures/face_o/")
         ds_builder.build_dataset("/home/sc/Pictures/face/")
     else:        
         classifs = {
