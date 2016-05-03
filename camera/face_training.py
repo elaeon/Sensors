@@ -25,8 +25,21 @@ class ProcessImage(object):
         self.pipeline(filters)
 
     def resize(self, image_size):
-        dim = (image_size, image_size)
-        if dim < self.image.shape or self.image.shape < dim:
+        if isinstance(image_size, int):
+            type_ = "sym"
+        elif isinstance(image_size, tuple):
+            image_size, type_ = image_size
+
+        if type_ == "asym":
+            dim = []
+            for v in self.image.shape:
+                if v > image_size:
+                    dim.append(image_size)
+                else:
+                    dim.append(v)
+        else:
+            dim = (image_size, image_size)
+        if dim < self.image.shape or self.image.shape <= dim:
             self.image = transform.resize(self.image, dim)
         
     def rgb2gray(self):
@@ -47,12 +60,34 @@ class ProcessImage(object):
         align = align_image.DetectorDlib(dlibFacePredictor)
         self.image = align.process_img(self.image)
 
-    def pipeline(self, commands):
-        for command, value in commands:
-            if value is not None:
-                getattr(self, command)(value)
-            else:
-                getattr(self, command)()
+    def cut(self, rectangle):
+        top, bottom, left, right = rectangle
+        self.image = self.image[top:bottom, left:right]
+
+    def merge_offset(self, image_size):
+        import random
+        bg = np.ones((image_size, image_size))
+        offset = (int(round(abs(bg.shape[0] - self.image.shape[0]) / 2)), 
+                int(round(abs(bg.shape[1] - self.image.shape[1]) / 2)))
+        pos_v, pos_h = offset
+        v_range1 = slice(max(0, pos_v), max(min(pos_v + self.image.shape[0], bg.shape[0]), 0))
+        h_range1 = slice(max(0, pos_h), max(min(pos_h + self.image.shape[1], bg.shape[1]), 0))
+        v_range2 = slice(max(0, -pos_v), min(-pos_v + bg.shape[0], self.image.shape[0]))
+        h_range2 = slice(max(0, -pos_h), min(-pos_h + bg.shape[1], self.image.shape[1]))
+        bg2 = bg - 1 + np.average(self.image) + random.uniform(-np.var(self.image), np.var(self.image))
+        #print(np.std(image))
+        #print(np.var(image))
+        bg2[v_range1, h_range1] = bg[v_range1, h_range1] - 1
+        bg2[v_range1, h_range1] = bg2[v_range1, h_range1] + self.image[v_range2, h_range2]
+        self.image = bg2
+
+    def pipeline(self, filters):
+        if filters is not None:
+            for filter_, value in filters:
+                if value is not None:
+                    getattr(self, filter_)(value)
+                else:
+                    getattr(self, filter_)()
 
 class DataSetBuilder(object):
     def __init__(self, name, image_size, channels=None, dataset_path=DATASET_PATH, 
@@ -156,22 +191,6 @@ class DataSetBuilder(object):
             print('Validation set DS[{}], labels[{}]'.format(save['valid_dataset'].shape, len(save['valid_labels'])))
             print('Test set DS[{}], labels[{}]'.format(save['test_dataset'].shape, len(save['test_labels'])))
             return save
-
-    #def process_images(self, gray=True, blur=True):
-    #    for image in self.images:
-    #        try:
-    #            if gray is True:
-    #                image = color.rgb2gray(image)
-
-    #            if (self.image_size, self.image_size) < image.shape or\
-    #                image.shape < (self.image_size, self.image_size):
-    #                image = transform.resize(image, (self.image_size, self.image_size))
-    #                print("Resized")
-    #            if blur is True:
-    #                image = filters.gaussian(image, .5)
-    #            yield image
-    #        except ValueError:
-    #            pass
 
     def merge_offset(self, image):
         import random

@@ -10,6 +10,8 @@ import argparse
 import face_training
 import align_image
 
+FILTERS = [("rgb2gray", None), ("align_face", None), ("resize", 90)]
+
 # Accept a single connection and make a file-like object out of it
 def read(num_images=5):
     client_socket = socket.socket()
@@ -52,30 +54,16 @@ def draw():
             start = time.time()
 
 
-#def get_faces(images, number_id=None, image_align=True):
-#    dlibFacePredictor = "/home/sc/dlib-18.18/python_examples/shape_predictor_68_face_landmarks.dat"
-#    if image_align is True:
-#        align = align_image.FaceAlign(dlibFacePredictor)
-#    else:
-#        align = align_image.DetectorDlib(dlibFacePredictor)
-#    if number_id is None:
-#        save_path = None
-#    else:
-#        save_path = (number_id, face_training.FACE_ORIGINAL_PATH)
-#    return align.process(images, save_path=save_path)
-
-
 def build_images_face(url, number_id):
     ds_builder = face_training.DataSetBuilder(90)
-    filters = [("rgb2gray", None), ("align_face", None), ("resize", 90)]
-    images = (face_training.ProcessImage(image, filters).image for img in read(num_images=20))
+    images = (face_training.ProcessImage(image, FILTERS).image for img in read(num_images=20))
     images, _ = ds_builder.build_train_test((number_id, images), sample=False)
     ds_builder.save_images(url, number_id, images.values())
 
+
 def detect_face(face_classif):
     from collections import Counter
-    filters = [("rgb2gray", None), ("align_face", None), ("resize", 90)]
-    images = (face_training.ProcessImage(image, filters).image for img in read(num_images=20))
+    images = (face_training.ProcessImage(image, FILTERS).image for img in read(num_images=20))
     counter = Counter(face_classif.predict_set(images))
     if len(counter) > 0:
         print(max(counter.items(), key=lambda x: x[1]))
@@ -103,12 +91,10 @@ if __name__  == '__main__':
     if args.empleado:
         build_images_face("/home/sc/Pictures/face/", args.empleado)
     elif args.build:
-        filters = [("rgb2gray", None), ("align_face", None), ("resize", 90)]
-        ds_builder = face_training.DataSetBuilder(dataset_name, 90, filters=filters)
-        ds_builder.build_dataset("/home/sc/Pictures/face/", filters)
+        ds_builder = face_training.DataSetBuilder(dataset_name, 90, filters=FILTERS)
+        ds_builder.build_dataset("/home/sc/Pictures/face/")
     elif args.rebuild:
-        filters = [("rgb2gray", None), ("align_face", None), ("resize", 90)]
-        ds_builder = face_training.DataSetBuilder(dataset_name, 90, filters=filters)
+        ds_builder = face_training.DataSetBuilder(dataset_name, 90, filters=FILTERS)
         ds_builder.original_to_images_set("/home/sc/Pictures/face_o/")
         ds_builder.build_dataset("/home/sc/Pictures/face/")
     else:        
@@ -138,7 +124,7 @@ if __name__  == '__main__':
         if args.foto:                  
             detect_face(face_classif)
         elif args.test:
-            d = face_training.DataSetBuilder(90)
+            d = face_training.DataSetBuilder(dataset_name, 90)
             d.detector_test(face_classif)
         elif args.train:
             face_classif.fit()
