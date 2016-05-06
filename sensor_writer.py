@@ -23,3 +23,9 @@ class WriterData(object):
                 queue.push(self.msg_format(message))
                 time.sleep(sleep)
             queue.close()
+
+    def test(self, messages_fn, loop=10):
+        for i, e in enumerate(messages_fn('test', loop)):
+            print(e)
+            if i == loop:
+                break
