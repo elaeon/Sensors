@@ -3,18 +3,19 @@ import platform
 from queuelib import FifoDiskQueue
 
 class WriterData(object):
-    def __init__(self, sensor_name):
-        self.node = platform.node().replace('.', '-')
+    def __init__(self, sensor_name, node=platform.node().replace('.', '-')):
+        self.node = node
         self.sensor_name = sensor_name
         self.database_name = "{}.fifo.sql".format(self.sensor_name)
-
+        self.root_name = 'sensors'
+        
     def msg_format(self, message):
         if len(message) == 2:
             v, timestamp = message
-            return "system.{}.{} {} {}\n".format(self.node, self.sensor_name, v, timestamp)
+            return "{}.{}.{} {} {}\n".format(self.root_name, self.node, self.sensor_name, v, timestamp)
         elif len(message) == 3:
             v, timestamp, name = message
-            return "system.{}.{} {} {}\n".format(self.node, name, v, timestamp)
+            return "{}.{}.{} {} {}\n".format(self.root_name, self.node, name, v, timestamp)
 
     def run(self, num_messages_second, messages_fn, sleep=1):
         while True:
