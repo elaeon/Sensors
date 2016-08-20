@@ -94,10 +94,10 @@ class SyncDataFromDisk(SyncData):
 
 
 class SyncDataFromMemory(SyncData):
-    def run(self, fn, batch_size=10, send_every=1):
+    def run(self, fn, batch_size=10, gen_data_every=1):
         queue_m = WriterMemoryData(self.name, batch_size=batch_size)
         while True:
-            messages = queue_m.generate_data(fn, sleep=send_every)
+            messages = queue_m.generate_data(fn, sleep=gen_data_every)
             response = self.send_blocks_msg(messages)
             #print(response)
             if response is None or response is not True:

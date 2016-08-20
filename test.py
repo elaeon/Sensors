@@ -10,4 +10,4 @@ def read_temp():
 
 if __name__ == '__main__':
     sensor_sync = SyncDataFromMemory("temperature", "192.168.1.73")
-    sensor_sync.run(read_temp, batch_size=10, send_every=2)
+    sensor_sync.run(read_temp, batch_size=10, gen_data_every=2)
