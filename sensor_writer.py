@@ -3,10 +3,11 @@ import platform
 from queuelib import FifoDiskQueue, FifoMemoryQueue
 
 class WriterData(object):
-    def __init__(self, sensor_name, node=platform.node().replace('.', '-')):
+    def __init__(self, sensor_name, node=platform.node().replace('.', '-'), batch_size=10):
         self.node = node
         self.sensor_name = sensor_name
         self.root_name = 'sensors'
+        self.batch_size = batch_size
         
     def msg_format(self, message):
         if len(message) == 2:
@@ -19,9 +20,9 @@ class WriterData(object):
     def run(self, fn, sleep=1):
         pass
 
-    def messages_fn(self, fn, batch_size=10):
+    def messages_fn(self, fn):
         i = 0
-        while i < batch_size:
+        while i < self.batch_size:
             value = fn()
             timestamp = int(time.time())
             yield (value, timestamp)

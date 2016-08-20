@@ -7,7 +7,7 @@ from sensor_writer import WriterDiskData, WriterMemoryData
 
 
 class SyncData(object):
-    def __init__(self, name, carbon_server, carbon_port=2003, delay=1, 
+    def __init__(self, name, carbon_server, carbon_port=2003, delay=3, 
                 delay_error_sensor=0.2, delay_error_connection=2):
         self.name = name
         self.DELAY = delay
@@ -67,30 +67,39 @@ class SyncData(object):
         if response is None:
             sensor_writer.save(messages)
         elif response is not True:
-            sensor_writer.save([result])
+            sensor_writer.save([response])
 
+    def is_network_up(self):
+        sock = socket.socket()
+        try:
+            sock.connect((self.CARBON_SERVER, self.CARBON_PORT))
+        except socket.error:
+            return False
+        else:
+            return True
+        finally:
+            sock.close()
 
 class SyncDataFromDisk(SyncData):
     def run(self):
         while True:
             queue = FifoDiskQueue("{}.fifo.sql".format(self.name))
-            if len(queue) > 0:
+            if len(queue) > 0 and self.is_network_up():
                 messages = queue.pull()
                 queue.close()
                 response = self.send_blocks_msg(messages)
                 if response is None or response is not True:
                     self.sync_failed(response, messages)
-
             time.sleep(self.DELAY)
 
 
 class SyncDataFromMemory(SyncData):
-    def run(self, fn):
-        queue_m = WriterMemoryData(self.name)
+    def run(self, fn, batch_size=10, send_every=1):
+        queue_m = WriterMemoryData(self.name, batch_size=batch_size)
         while True:
-            messages = queue_m.generate_data(fn)
+            messages = queue_m.generate_data(fn, sleep=send_every)
             response = self.send_blocks_msg(messages)
-            print(response)
+            #print(response)
             if response is None or response is not True:
                 self.sync_failed(response, messages)
             
