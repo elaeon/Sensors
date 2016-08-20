@@ -3,6 +3,7 @@ import socket
 import logging
 
 from queuelib import FifoDiskQueue
+from sensor_writer import WriterDiskData, WriterMemoryData
 
 
 class SyncData(object):
@@ -31,7 +32,8 @@ class SyncData(object):
             sock.connect((self.CARBON_SERVER, self.CARBON_PORT))
             sock.sendall(message)
         except socket.error:
-            self.logger.info("No se puede conectar a carbon {}:{}, {}".format(self.CARBON_SERVER, self.CARBON_PORT, message))
+            self.logger.info("No se puede conectar a carbon {}:{}, {}".format(
+                self.CARBON_SERVER, self.CARBON_PORT, message))
             return False
         except TypeError:
             return True
@@ -42,40 +44,53 @@ class SyncData(object):
 
     def send_blocks_msg(self, messages):
         sock = socket.socket()
+        tmp_msg = None
         try:
             sock.connect((self.CARBON_SERVER, self.CARBON_PORT))
             for message in messages:
-                sock.sendall(message)
+                tmp_msg = message
+                sock.sendall(tmp_msg)
         except socket.error:
-            self.logger.info("No se puede conectar a carbon {}:{}, {}".format(self.CARBON_SERVER, self.CARBON_PORT, message))
-            return False
+            self.logger.info("No se puede conectar a carbon {}:{}".format(
+                self.CARBON_SERVER, self.CARBON_PORT))
+            return tmp_msg
         else:
             return True
         finally:
             sock.close()
 
     def run(self):
+        pass
+
+    def sync_failed(self, response, messages):
+        sensor_writer = WriterDiskData(self.name)
+        if response is None:
+            sensor_writer.save(messages)
+        elif response is not True:
+            sensor_writer.save([result])
+
+
+class SyncDataFromDisk(SyncData):
+    def run(self):
         while True:
             queue = FifoDiskQueue("{}.fifo.sql".format(self.name))
-            print(len(queue))
-            message = queue.pop()
-            while len(queue) >= 20:
-                messages = [message]
-                while len(messages) <= 19 and message is not None:
-                    messages.append(queue.pop())
-                if not self.send_blocks_msg(messages):
-                    for message in messages:
-                        queue.push(message)
-                    break
-            else:
-                if not self.send_msg(message):
-                    queue.push(message)
-            queue.close()
+            if len(queue) > 0:
+                messages = queue.pull()
+                queue.close()
+                response = self.send_blocks_msg(messages)
+                if response is None or response is not True:
+                    self.sync_failed(response, messages)
+
             time.sleep(self.DELAY)
 
-    def test(self):
-        i = 0
-        while i < 10:
-            print(self.send_msg(""))
-            time.sleep(self.DELAY)
-            i += 1
+
+class SyncDataFromMemory(SyncData):
+    def run(self, fn):
+        queue_m = WriterMemoryData(self.name)
+        while True:
+            messages = queue_m.generate_data(fn)
+            response = self.send_blocks_msg(messages)
+            print(response)
+            if response is None or response is not True:
+                self.sync_failed(response, messages)
+            

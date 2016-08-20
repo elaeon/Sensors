@@ -1,6 +1,27 @@
 import os
 import sqlite3
 
+class FifoMemoryQueue(object):
+    def __init__(self):
+        self._db = []
+
+    def push(self, item):
+        if not isinstance(item, bytes):
+            raise TypeError('Unsupported type: {}'.format(type(item).__name__))
+        self._db.append(item)
+
+    def pop(self):
+        self._db.pop()
+
+    def pull(self, batch_size=10):
+        return self._db[:batch_size]
+
+    def close(self):
+        self._db = []
+
+    def __len__(self):
+        return len(self._db)
+
 class FifoDiskQueue(object):
     _create = (
         'CREATE TABLE IF NOT EXISTS fifoqueue '
@@ -9,6 +30,7 @@ class FifoDiskQueue(object):
     _size = 'SELECT COUNT(*) FROM fifoqueue'
     _push = 'INSERT INTO fifoqueue (item) VALUES (?)'
     _pop = 'SELECT id, item FROM fifoqueue ORDER BY id LIMIT 1'
+    _pull = 'SELECT id, item FROM fifoqueue ORDER BY id LIMIT 20'
     _del = 'DELETE FROM fifoqueue WHERE id = ?'
 
     def __init__(self, path):
@@ -28,6 +50,12 @@ class FifoDiskQueue(object):
     def pop(self):
         with self._db as conn:
             for id_, item in conn.execute(self._pop):
+                conn.execute(self._del, (id_,))
+                return item
+
+    def pull(self):
+        with self._db as conn:
+            for id_, item in conn.execute(self._pull):
                 conn.execute(self._del, (id_,))
                 return item
 

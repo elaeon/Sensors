@@ -29,14 +29,7 @@ def read_temp():
       temp_c = float(temp_string) / 1000.0
       return temp_c
 
-def messages_fn(node, size):
-    i = 0
-    while i < size:
-        t = read_temp()
-        timestamp = int(time.time())
-        yield (t, timestamp)
-        i += 1
 
 if __name__ == '__main__':
     sensor_writer = WriterData("temperature")
-    sensor_writer.run(10, messages_fn)
+    sensor_writer.run(read_temp)
