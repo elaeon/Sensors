@@ -14,10 +14,11 @@ Then, call a sync
 ```python
 if __name__ == '__main__':
     sensor_sync = SyncDataFromMemory(sensor_name, ip_adress, port)
+    #send data with a chunk size of 10, each element of this chunk is generated every 2 seconds.
     sensor_sync.run(random_data, batch_size=10, gen_data_every=2)
 ```
 Run the script in background.
-In a separated file, build the another sync, this sync will send data previously stored, deriveted from network errors conections. The sensor's name will be the same as SyncDataFromMemory
+In a separated file, build another sync, this sync will send data previously stored, derivated from network errors conections. The sensor's name will be the same as SyncDataFromMemory
 
 ```python
 #!/usr/bin/python2.7
