@@ -1,5 +1,5 @@
 # sensors
-Sensors, is an library for send datatime series over the network, for example data generated from temperature sensors.
+Sensors, is a library for send datatime series over the network, for example data generated from temperature sensors.
 
 Example.
 First define a function where the data is generated.
