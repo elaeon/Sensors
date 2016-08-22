@@ -1,6 +1,6 @@
 #!/usr/bin/python2.7
 
-from sensor_sync import SyncDataFromMemory
+from sensor_sync import SyncDataFromMemory, SyncDataFromDisk
 
 
 def read_temp():
@@ -9,5 +9,7 @@ def read_temp():
 
 
 if __name__ == '__main__':
-    sensor_sync = SyncDataFromMemory("temperature", "192.168.1.73")
-    sensor_sync.run(read_temp, batch_size=10, gen_data_every=2)
+    #sensor_sync = SyncDataFromMemory("temperature", "192.168.1.73")
+    #sensor_sync.run(read_temp, batch_size=10, gen_data_every=2)
+    sensor_sync = SyncDataFromDisk("temperature", "192.168.1.73")
+    sensor_sync.run()

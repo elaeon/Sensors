@@ -30,7 +30,7 @@ class FifoDiskQueue(object):
     _size = 'SELECT COUNT(*) FROM fifoqueue'
     _push = 'INSERT INTO fifoqueue (item) VALUES (?)'
     _pop = 'SELECT id, item FROM fifoqueue ORDER BY id LIMIT 1'
-    _pull = 'SELECT id, item FROM fifoqueue ORDER BY id LIMIT 20'
+    _pull = 'SELECT id, item FROM fifoqueue ORDER BY id LIMIT 10'
     _del = 'DELETE FROM fifoqueue WHERE id = ?'
 
     def __init__(self, path):
@@ -55,9 +55,10 @@ class FifoDiskQueue(object):
 
     def pull(self):
         with self._db as conn:
-            for id_, item in conn.execute(self._pull):
+            items = list(conn.execute(self._pull))
+            for id_, _ in items:
                 conn.execute(self._del, (id_,))
-                return item
+            return [item for _, item in items]
 
     def close(self):
         #if len(self) == 0:

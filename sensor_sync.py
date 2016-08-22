@@ -80,16 +80,18 @@ class SyncData(object):
         finally:
             sock.close()
 
+
 class SyncDataFromDisk(SyncData):
     def run(self):
         while True:
             queue = FifoDiskQueue("{}.fifo.sql".format(self.name))
+            #print(len(queue))
             if len(queue) > 0 and self.is_network_up():
                 messages = queue.pull()
-                queue.close()
                 response = self.send_blocks_msg(messages)
                 if response is None or response is not True:
                     self.sync_failed(response, messages)
+            queue.close()
             time.sleep(self.DELAY)
 
 
