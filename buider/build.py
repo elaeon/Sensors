@@ -1,4 +1,4 @@
-from fabric.api import run, local, env, cd
+from fabric.api import run, local, env, cd, put
 
 env.user = "pi"
 
@@ -15,7 +15,7 @@ def install_supervisor():
 
 def supervisor_conf():
     local("cp sensors.conf /tmp/sensors.conf")
-    put("/tmp/sensors.conf", "/etc/supervisor/conf.d/sensors.conf")
+    put("/tmp/sensors.conf", "/etc/supervisor/conf.d/sensors.conf", use_sudo=True)
 
 def install_sensors():
     with cd('/var/'):
