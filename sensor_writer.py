@@ -10,12 +10,8 @@ class WriterData(object):
         self.batch_size = batch_size
         
     def msg_format(self, message):
-        if len(message) == 2:
-            v, timestamp = message
-            return "{}.{}.{} {} {}\n".format(self.root_name, self.node, self.sensor_name, v, timestamp)
-        elif len(message) == 3:
-            v, timestamp, name = message
-            return "{}.{}.{} {} {}\n".format(self.root_name, self.node, name, v, timestamp)
+        v, timestamp, name = message
+        return "{}.{}.{} {} {}\n".format(self.root_name, self.node, name, v, timestamp)
 
     def run(self, fn, sleep=1):
         pass
@@ -25,8 +21,14 @@ class WriterData(object):
         while i < self.batch_size:
             value = fn()
             timestamp = int(time.time())
-            yield (value, timestamp)
-            i += 1
+            values = value if isinstance(value, tuple) else (value,)
+            if len(values) > 1:
+                sensors_names = ("humidity_A", "temperature_A")
+            else:
+                sensors_names = (self.sensor_name,)
+            for value, sensor_name in zip(values, sensors_names):
+                yield (value, timestamp, sensor_name)
+                i += 1
 
     def generate_data(self, fn, sleep=1):
         for message in self.messages_fn(fn):
