@@ -30,6 +30,5 @@ def get_settings(base_path, directory=None):
         settings_path = os.path.join(os.path.dirname(os.path.abspath(base_path)), "settings.cfg")
     else:
         settings_path = os.path.join(os.path.dirname(os.path.abspath(base_path)), directory, "settings.cfg")
-    print(settings_path)
     config.read(settings_path)
     return config
