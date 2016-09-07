@@ -1,6 +1,6 @@
 #!/usr/bin/python2.7
 from examples.door_sync import check_door
-from examples.termopar_sync import read_temp
+from examples.termopar_1_sync import read_temp
 from examples.temperature_humidity_sync import get_humidity_temperature
 from utils import check_network, check_carbon
 import time

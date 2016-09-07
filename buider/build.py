@@ -47,12 +47,12 @@ def install_bibliotecas_humedad():
         sudo("python setup.py install")
 
 def change_sensors_file_mod():
-    run("sudo chmod 755 /var/sensors/examples/")
+    run("sudo chmod -R 755 /var/sensors/examples/")
 
-def test():
+def test_sensors():
     run("python /var/sensors/test_examples.py")
 
-def check_scripts():
+def check_supervisor():
     run("supervisotctl status")
 
 def install():
