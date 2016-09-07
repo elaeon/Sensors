@@ -4,7 +4,7 @@ from utils import get_settings
 
 settings = get_settings(__file__)
 CARBON_HOST = settings.get("server", "carbon_server")
-SENSOR_NAME = "temperature_humidity"
+SENSOR_NAME = "puerta"
 
 if __name__ == '__main__':
     sensor_sync = SyncDataFromDisk(SENSOR_NAME, CARBON_HOST)

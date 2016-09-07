@@ -1,7 +1,9 @@
 #!/usr/bin/python2.7
 from sensor_sync import SyncDataFromDisk
+from utils import get_settings
 
-CARBON_HOST = "192.168.1.73"
+settings = get_settings(__file__)
+CARBON_HOST = settings.get("server", "carbon_server")
 SENSOR_NAME = "temperature_low_one"
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-from fabric.api import run, local, env, cd, put, sudo
+from fabric.api import run, local, env, cd, put, sudo, reboot
 
 env.user = "pi"
 
@@ -46,10 +46,17 @@ def install_bibliotecas_humedad():
     with cd('/home/pi/Adafruit_Python_DHT'):
         sudo("python setup.py install")
 
+def change_sensors_file_mod():
+    run("sudo chmod 755 /var/sensors/examples/")
 
 def install():
     install_git()
     install_supervisor()
     install_sensors()
-    supervisor_conf()
+    install_ds18b20()
+    modprobes_enable()
+    install_bibliotecas_humedad()
+    supervisor_conf()    
+    change_sensors_file_mod()
     config_hostname()
+    reboot(wait=5)
