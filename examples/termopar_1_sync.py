@@ -1,6 +1,7 @@
 #!/usr/bin/python2.7
 from sensor_sync import SyncDataFromMemory
 from utils import get_settings
+import os
 
 settings = get_settings(__file__)
 CARBON_HOST = settings.get("server", "carbon_server")
