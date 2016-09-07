@@ -23,6 +23,9 @@ def supervisor_conf():
 def install_sensors():
     with cd('/var/'):
         run("sudo git clone https://github.com/elaeon/sensors.git")
+    local("cp settings.cfg /tmp/settings.cfg")
+    put("/tmp/settings.cfg", "/var/sensors/examples/settings.cfg", use_sudo=True)
+    run("sudo chown -R pi:pi /var/sensors/")
 
 def install_ds18b20():
     command = "echo 'dtoverlay=w1-gpio' >> /boot/config.txt"
