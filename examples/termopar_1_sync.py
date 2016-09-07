@@ -10,7 +10,7 @@ import os
 settings = get_settings(__file__)
 CARBON_HOST = settings.get("server", "carbon_server")
 SENSOR_NAME = "temperature_low_one"
-DEVICE_NUMBER = "28-01155244f3ff"
+DEVICE_NUMBER = settings.get("sensor_termopar", "device_number")
 
 os.system('modprobe w1-gpio')
 os.system('modprobe w1-therm')
