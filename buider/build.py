@@ -47,7 +47,7 @@ def install_bibliotecas_humedad():
         sudo("python setup.py install")
 
 def change_sensors_file_mod():
-    run("sudo chmod -R 755 /var/sensors/examples/")
+    run("sudo chmod 755 /var/sensors/examples/*.py")
 
 def test_sensors():
     run("python /var/sensors/test_examples.py")
