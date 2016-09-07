@@ -1,4 +1,8 @@
 #!/usr/bin/python2.7
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from sensor_sync import SyncDataFromMemory
 from utils import get_settings
 import os

@@ -53,7 +53,7 @@ def test_sensors():
     run("python /var/sensors/test_examples.py")
 
 def check_supervisor():
-    run("supervisotctl status")
+    run("sudo supervisorctl status")
 
 def install():
     install_git()
