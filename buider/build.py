@@ -66,6 +66,10 @@ def install_termopar_paso_1():
 def install_termopar_paso_2():
     nombre_sensor()
 
+#paso_2___1:   se copia en la carpeta cp examples/settings.example.cfg  examples/settings.cfg 
+#paso 2___2:   se modifica el settings.cfg y se pone el nombre del sensor que salio de el paso_2
+
+
 def create_permissions_loggers():
     run("touch /tmp/puerta.log")
     run("touch /tmp/temperature_low_one.log")
@@ -81,3 +85,6 @@ def install():
     config_hostname()
     create_permissions_loggers()
     reboot(wait=5)
+
+
+#paso 4__1 raspiconnfig se modifica el timezone y la internacionalizacion
