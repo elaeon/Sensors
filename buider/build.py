@@ -88,3 +88,17 @@ def install():
 
 
 #paso 4__1 raspiconnfig se modifica el timezone y la internacionalizacion
+
+
+def adiciona_wifi_visitas():
+    pass_wifi = raw_input("Password de wifi visitas: ")
+
+    linea_1 = "echo \'network={\' >> /etc/wpa_supplicant/wpa_supplicant.conf"
+    linea_2 = "echo \'    ssid=\"visitas\"\' >> /etc/wpa_supplicant/wpa_supplicant.conf"
+    linea_3 = "echo \'    psk=\"{pass_wifi}\"\' >> /etc/wpa_supplicant/wpa_supplicant.conf".format(pass_wifi=pass_wifi)
+    linea_4 = "echo \'}\' >> /etc/wpa_supplicant/wpa_supplicant.conf"
+
+    sudo(linea_1)
+    sudo(linea_2)
+    sudo(linea_3)
+    sudo(linea_4)
