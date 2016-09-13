@@ -58,14 +58,26 @@ def test_sensors():
 def check_supervisor():
     run("sudo supervisorctl status")
 
+def install_termopar_paso_1():
+    install_ds18b20()
+    modprobes_enable()
+    reboot(wait=5)
+
+def install_termopar_paso_2():
+    nombre_sensor()
+
+def create_permissions_loggers():
+    run("touch /tmp/puerta.log")
+    run("touch /tmp/temperature_low_one.log")
+    run("chown pi:pi /tmp/*.log")
+    
 def install():
     install_git()
     install_supervisor()
     install_sensors()
-    install_ds18b20()
-    modprobes_enable()
     install_bibliotecas_humedad()
     supervisor_conf()    
     change_sensors_file_mod()
     config_hostname()
+    create_permissions_loggers()
     reboot(wait=5)
