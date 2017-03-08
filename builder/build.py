@@ -1,6 +1,12 @@
 from fabric.api import run, local, env, cd, put, sudo, reboot
 
+# una forma en que se puede correr este comando es 
+#(raspberry-env) ramiro@homer:~/Documentos/raspbpi/sensors/buider$ fab -f build.py test_sensors -H 192.168.52.114 --port 1013
+
 env.user = "pi"
+
+def host_type():
+    run('uname -s')
 
 def config_hostname():
     hostname = raw_input("Hostname: ")
@@ -19,6 +25,14 @@ def install_supervisor():
 def supervisor_conf():
     local("cp sensors.conf /tmp/sensors.conf")
     put("/tmp/sensors.conf", "/etc/supervisor/conf.d/sensors.conf", use_sudo=True)
+
+def backup_configtxt():
+    with cd('/boot/'):    
+        sudo("cp config.txt config.txt.back")
+
+def envio_configtxt():
+    local("cp config.txt /tmp/config.txt")
+    put("/tmp/config.txt", "/boot/config.txt", use_sudo=True)
 
 def install_sensors():
     with cd('/var/'):
@@ -66,7 +80,7 @@ def install_termopar_paso_1():
 def install_termopar_paso_2():
     nombre_sensor()
 
-#paso_2___1:   se copia en la carpeta cp examples/settings.example.cfg  examples/settings.cfg 
+#paso_2___1:   se copia en la carpeta cp examples/settings.example.cfg  examples/settings.cfg  # el settings.cfg debe estar dentro de la carpeta buider, cuando se corre: fab -f build.py test_sensors -H 192.168.52.114 --port 1013  
 #paso 2___2:   se modifica el settings.cfg y se pone el nombre del sensor que salio de el paso_2
 
 
@@ -89,7 +103,8 @@ def install():
 
 #paso 4__1 raspiconnfig se modifica el timezone y la internacionalizacion
 
-
+### Lo que continua del paso 4 es poner la red de visitas, y configurar el monitor pequeno, ambos son opcionales
+ 
 def adiciona_wifi_visitas():
     pass_wifi = raw_input("Password de wifi visitas: ")
 
@@ -102,3 +117,8 @@ def adiciona_wifi_visitas():
     sudo(linea_2)
     sudo(linea_3)
     sudo(linea_4)
+
+def configura_monitor_peque():
+    backup_configtxt()
+    envio_configtxt()
+
