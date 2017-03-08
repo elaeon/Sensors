@@ -64,6 +64,7 @@ class SyncData(object):
 
     def sync_failed(self, response, messages):
         sensor_writer = WriterDiskData(self.name)
+        self.logger.info("Saved messages")
         if response is None:
             sensor_writer.save(messages)
         elif response is not True:
@@ -82,13 +83,18 @@ class SyncData(object):
 
 
 class SyncDataFromDisk(SyncData):
+    def slow(self, messages):
+        for message in messages:
+            time.sleep(.5)
+            yield message
+
     def run(self):
         while True:
             queue = FifoDiskQueue("{}.fifo.sql".format(self.name))
-            #print(len(queue))
-            if len(queue) > 0 and self.is_network_up():
+            self.logger.info("Data saved: {}".format(len(queue)))
+            if len(queue) > 0:
                 messages = queue.pull()
-                response = self.send_blocks_msg(messages)
+                response = self.send_blocks_msg(self.slow(messages))
                 if response is None or response is not True:
                     self.sync_failed(response, messages)
             queue.close()
@@ -101,7 +107,6 @@ class SyncDataFromMemory(SyncData):
         while True:
             messages = queue_m.generate_data(fn, sleep=gen_data_every)
             response = self.send_blocks_msg(messages)
-            #print(response)
             if response is None or response is not True:
                 self.sync_failed(response, messages)
             

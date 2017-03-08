@@ -41,6 +41,7 @@ class FifoDiskQueue(object):
             conn.execute(self._create)
 
     def push(self, item):
+        # fix this, it don't work in python3
         if not isinstance(item, bytes):
             raise TypeError('Unsupported type: {}'.format(type(item).__name__))
 
