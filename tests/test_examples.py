@@ -1,13 +1,16 @@
 #!/usr/bin/python2.7
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from examples.door_sync import check_door
 from examples.termopar_1_sync import read_temp
 from examples.temperature_humidity_sync import get_humidity_temperature
 from utils import check_network, check_carbon
 import time
-import os
 from utils import get_settings
 
-settings = get_settings(__file__, directory="examples")
+settings = get_settings(__file__, directory="../examples")
 carbon_server = settings.get("server", "carbon_server")
 carbon_port = int(settings.get("server", "carbon_port"))
 
