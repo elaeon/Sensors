@@ -6,7 +6,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from examples.door_sync import check_door
 from examples.termopar_1_sync import read_temp
 from examples.temperature_humidity_sync import get_humidity_temperature
-from utils import check_network, check_carbon
+from utils import check_network
 import time
 from utils import get_settings
 
@@ -21,8 +21,8 @@ def loop(fn, msg):
         time.sleep(.5)
         count += 1
 
-print("[OK] NETWORK" if check_network() else "[ERROR] NETWORK")
-print("[OK] CARBON SERVER" if check_carbon(carbon_server, carbon_port) else "[ERROR] CARBON SERVER")
+print("[OK] NETWORK" if check_network("www.google.com", 80) else "[ERROR] NETWORK")
+print("[OK] CARBON SERVER" if check_network(carbon_server, carbon_port) else "[ERROR] CARBON SERVER")
 loop(check_door, "PUERTA")
 loop(read_temp, "TERMO PAR")
 loop(get_humidity_temperature, "HUMIDITY, TEMP")
