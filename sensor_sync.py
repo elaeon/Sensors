@@ -27,8 +27,9 @@ class SyncData(object):
         return logger
 
     def send_msg(self, message):
-        sock = socket.socket()
         try:
+            sock = socket.socket()
+            sock.settimeout(2.0)
             sock.connect((self.CARBON_SERVER, self.CARBON_PORT))
             sock.sendall(message)
         except socket.error:
@@ -74,17 +75,6 @@ class SyncData(object):
             sensor_writer.save(messages)
         elif response is not True:
             sensor_writer.save([response])
-
-    def is_network_up(self):
-        sock = socket.socket()
-        try:
-            sock.connect((self.CARBON_SERVER, self.CARBON_PORT))
-        except socket.error:
-            return False
-        else:
-            return True
-        finally:
-            sock.close()
 
 
 class SyncDataFromDisk(SyncData):
