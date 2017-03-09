@@ -13,9 +13,6 @@ def check_network(host, port):
     finally:
         sock.close()
 
-def check_carbon(carbon_server, carbon_port):
-    return check_network(carbon_server, carbon_port)
-
 def get_settings(base_path, directory=None):
     import ConfigParser
     import os
