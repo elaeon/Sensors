@@ -43,15 +43,20 @@ class SyncData(object):
             sock.close()
 
     def send_blocks_msg(self, messages):
-        sock = socket.socket()
         tmp_msg = None
         try:
+            sock = socket.socket()
+            sock.settimeout(2.0)
             sock.connect((self.CARBON_SERVER, self.CARBON_PORT))
             for message in messages:
                 tmp_msg = message
                 sock.sendall(tmp_msg)
         except socket.error:
             self.logger.info("No se puede conectar a carbon {}:{}".format(
+                self.CARBON_SERVER, self.CARBON_PORT))
+            return tmp_msg
+        except socket.timeout:
+            self.logger.info("timeout {}:{}".format(
                 self.CARBON_SERVER, self.CARBON_PORT))
             return tmp_msg
         else:
