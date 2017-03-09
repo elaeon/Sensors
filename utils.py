@@ -1,9 +1,12 @@
-def check_network():
+def check_network(host, port):
     import socket
-    sock = socket.socket()
     try:
-        sock.connect(("www.google.com", 80))
+        sock = socket.socket()
+        sock.settimeout(2.0)
+        sock.connect((host, port))
     except socket.error:
+        return False
+    except socket.timeout:
         return False
     else:
         return True
@@ -11,16 +14,7 @@ def check_network():
         sock.close()
 
 def check_carbon(carbon_server, carbon_port):
-    import socket
-    sock = socket.socket()
-    try:
-        sock.connect((carbon_server, carbon_port))
-    except socket.error:
-        return False
-    else:
-        return True
-    finally:
-        sock.close()
+    return check_network(carbon_server, carbon_port)
 
 def get_settings(base_path, directory=None):
     import ConfigParser
