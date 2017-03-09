@@ -2,7 +2,7 @@ def check_network(host, port):
     import socket
     try:
         sock = socket.socket()
-        sock.settimeout(2.0)
+        sock.settimeout(10.0)
         sock.connect((host, port))
     except socket.error:
         return False
