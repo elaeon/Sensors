@@ -23,3 +23,10 @@ def get_settings(base_path, directory=None):
         settings_path = os.path.join(os.path.dirname(os.path.abspath(base_path)), directory, "settings.cfg")
     config.read(settings_path)
     return config
+
+
+def two_point_calibration(raw_value, raw_low, raw_high, ref_low, ref_high):
+    raw_range = abs(raw_high - raw_low)
+    ref_range = abs(ref_high - ref_low)
+    corrected_value = (((raw_value - raw_low) * ref_range) / raw_range) + ref_low
+    return corrected_value
