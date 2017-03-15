@@ -13,6 +13,7 @@ def check_network(host, port):
     finally:
         sock.close()
 
+
 def get_settings(base_path, directory=None):
     import ConfigParser
     import os
