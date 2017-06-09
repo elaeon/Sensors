@@ -1,68 +1,34 @@
-#!/usr/bin/python2.7
-from threading import Thread 
-from SocketServer import ThreadingMixIn 
+#!/usr/bin/python3
+import asyncore
 import socket
-import logging
+import time
+import random
 
-formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-logger = logging.getLogger("test_server")
-hdlr = logging.FileHandler('/tmp/server_echo.log')
-hdlr.setFormatter(formatter)
-logger.addHandler(hdlr)
-logger.setLevel(logging.INFO)
+class EchoHandler(asyncore.dispatcher_with_send):
 
-# Multithreaded Python server : TCP Server Socket Thread Pool
-class ClientThread(Thread): 
- 
-    def __init__(self, conn, ip, port): 
-        Thread.__init__(self) 
-        self.ip = ip 
-        self.port = port
-        self.conn = conn
- 
-    def run(self): 
-        while True : 
-            data = self.conn.recv(2048) 
-            #conn.send(MESSAGE)  # echo 
-            if not data: break
-            logger.info("Data: {}".format(data))
-        self.conn.close()
-
-# Multithreaded Python server : TCP Server Socket Program Stub
-HOST = '127.0.0.1' 
-PORT = 2003
-BUFFER_SIZE = 20
-
-def single():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind((HOST, PORT))
-    s.listen(1)
-    conn, addr = s.accept()
-    while 1:
-        data = conn.recv(1024)
-        if not data: break
-        #conn.sendall(data)
+    def handle_read(self):
+        data = self.recv(8192)
         print(data)
-    conn.close()
+        #self.send(data)
 
 
-def multi(): 
-    tcpServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
-    tcpServer.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
-    tcpServer.bind((HOST, PORT)) 
-    threads = [] 
-     
-    while True: 
-        tcpServer.listen(4)
-        (conn, (ip, port)) = tcpServer.accept()
-        newthread = ClientThread(conn, ip, port) 
-        newthread.start() 
-        threads.append(newthread) 
-     
-    for t in threads: 
-        t.join() 
+class EchoServer(asyncore.dispatcher):
 
+    def __init__(self, host, port):
+        asyncore.dispatcher.__init__(self)
+        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.set_reuse_addr()
+        self.bind((host, port))
+        self.listen(5)
 
-if __name__ == '__main__':
-    #single()
-    multi()
+    def handle_accept(self):
+        pair = self.accept()
+        if pair is None:
+            return
+        else:
+            sock, addr = pair
+            print('Incoming connection from %s' % repr(addr))
+            handler = EchoHandler(sock)
+
+server = EchoServer('192.168.52.152', 8080)
+asyncore.loop()
