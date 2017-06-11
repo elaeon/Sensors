@@ -1,6 +1,7 @@
 import asyncore, socket, threading
 import time
-import random
+import logging
+
 from queuelib import FifoDiskQueue
 
 
@@ -22,7 +23,7 @@ class Client(asyncore.dispatcher):
         self.data = data
 
         print("NEW")
-        self.t = SenderThread(self, self.data)
+        self.t = SenderThread(self, self.data, delay=self.delay)
         self.t.start()
 
     def handle_connect(self):
@@ -60,10 +61,11 @@ class Client(asyncore.dispatcher):
 class SenderThread(threading.Thread):
     _stop_t = False
 
-    def __init__(self, client, data):
+    def __init__(self, client, data, delay=1):
         super(SenderThread, self).__init__()
         self.client = client
         self.data = data
+        self.delay = delay
 
     def stop(self):
         self._stop_t = True
@@ -73,7 +75,7 @@ class SenderThread(threading.Thread):
         timestamps = []
         while self._stop_t == False:
             counter += 1
-            time.sleep(1)
+            time.sleep(self.delay)
             timestamps.append(next(self.data))
             if counter % CHUNK_SIZE == 0:
                 print("sending data from thread")
@@ -86,7 +88,7 @@ class SyncData(object):
     def __init__(self, name, carbon_server, carbon_port=2003, delay=3, 
                 delay_error_sensor=0.2, delay_error_connection=2):
         self.name = name
-        self.DELAY = delay
+        self.delay = delay
         self.CARBON_SERVER = carbon_server
         self.CARBON_PORT = carbon_port
         self.logger = self.logging_setup()
