@@ -17,15 +17,21 @@ import Adafruit_DHT
 RETRIES = 10
 DELAY_ERROR_SENSOR = .5
 
-raw_low = settings.get("two_point_calibration", "raw_low")
-raw_high = settings.get("two_point_calibration", "raw_high")
-ref_low = settings.get("two_point_calibration", "ref_low")
-ref_high = settings.get("two_point_calibration", "ref_high")
+raw_low_h = settings.get("two_point_calibration_1", "raw_low")
+raw_high_h = settings.get("two_point_calibration_1", "raw_high")
+ref_low_h = settings.get("two_point_calibration_1", "ref_low")
+ref_high_h = settings.get("two_point_calibration_1", "ref_high")
+
+raw_low_t = settings.get("two_point_calibration_2", "raw_low")
+raw_high_t = settings.get("two_point_calibration_2", "raw_high")
+ref_low_t = settings.get("two_point_calibration_2", "ref_low")
+ref_high_t = settings.get("two_point_calibration_2", "ref_high")
 
 def get_humidity_temperature():
     humidity, temperature = Adafruit_DHT.read_retry(
         Adafruit_DHT.AM2302, GPIO, retries=RETRIES, delay_seconds=DELAY_ERROR_SENSOR)
-    humidity = two_point_calibration(humidity, raw_low, raw_high, ref_low, ref_high)
+    humidity = two_point_calibration(humidity, raw_low_h, raw_high_h, ref_low_h, ref_high_h)
+    temperature = two_point_calibration(temperature, raw_low_t, raw_high_t, ref_low_t, ref_high_t)
     return humidity, temperature
 
 if __name__ == '__main__':
