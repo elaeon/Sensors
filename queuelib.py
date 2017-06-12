@@ -108,7 +108,7 @@ class FifoDiskQueue(object):
 
     def close(self):
         for k in self._connection_cache.keys():
-            self._connection_cache.close()
+            self._connection_cache[k].close()
         self._connection_cache = {}
 
     

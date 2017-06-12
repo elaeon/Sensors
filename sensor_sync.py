@@ -4,27 +4,25 @@ import logging
 
 from queuelib import FifoDiskQueue
 
-
-CHUNK_SIZE = 5
-#def generator():
-#    while True:
-#        yield "{}.{}".format(10, int(time.time()))
+global_l = []
 
 
 class Client(asyncore.dispatcher):
 
-    def __init__(self, host, port=8080, name="client_data", delay=1, data=None):
+    def __init__(self, host, port=8080, name="client_data", delay=1,
+                formater=None, batch_size=5):
         asyncore.dispatcher.__init__(self)
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connect((host, port))
         self.buffer = ""
         self.name = name
         self.delay = delay
-        self.data = data
+        self.formater = formater
 
         print("NEW")
-        self.t = SenderThread(self, self.data, delay=self.delay)
-        self.t.start()
+        self.t_net = SenderThread(self, self.formater, 
+                            delay=self.delay, batch_size=batch_size)
+        self.t_net.start()
 
     def handle_connect(self):
         print("conected")
@@ -32,14 +30,7 @@ class Client(asyncore.dispatcher):
     def handle_close(self):
         print("closed")
         self.close()
-        fq = FifoDiskQueue("{}.fifo.sql".format(self.name))
-        for i in range(10):
-            obj = next(self.data)
-            fq.push(obj)
-            print("SAVED", obj)
-            time.sleep(self.delay)
-        fq.close()
-        self.t.stop()
+        self.t_net.stop()
 
     def handle_read(self):
         print(self.recv(8192))
@@ -55,17 +46,57 @@ class Client(asyncore.dispatcher):
         self.buffer = self.buffer[sent:]
 
     def send_data(self, data):
-        self.buffer = bytes(data, 'ascii')
+        ndata = list(data)
+        ndata.append('')
+        self.buffer = bytes('\r\n\r\n'.join(ndata), 'ascii')
+
+    @classmethod
+    def cls_name(cls):
+        return cls.__name__
 
 
 class SenderThread(threading.Thread):
     _stop_t = False
 
-    def __init__(self, client, data, delay=1):
+    def __init__(self, client, formater, delay=1, batch_size=5):
         super(SenderThread, self).__init__()
         self.client = client
-        self.data = data
         self.delay = delay
+        self.formater = formater
+        self.batch_size = batch_size
+
+    def stop(self):
+        self._stop_t = True
+
+    def run(self):
+        global global_l
+        counter = 0
+        while self._stop_t == False:
+            counter += 1
+            time.sleep(self.delay)
+            if counter % self.batch_size == 0:
+                print("sending data from thread {}".format(self.client.cls_name()))
+                self.client.send_data(global_l[:self.batch_size])
+                global_l = global_l[self.batch_size:]
+
+            if len(global_l) > 2*self.batch_size:
+                fq = FifoDiskQueue("{}.fifo.sql".format(self.client.name))
+                for obj in global_l[:self.batch_size*2]:
+                    print("SAVED: {}".format(obj))
+                    fq.push(obj)
+                global_l = global_l[self.batch_size*2:]
+                fq.close()
+
+
+class GeneratorThread(threading.Thread):
+    _stop_t = False
+
+    def __init__(self, fn_data, formater, delay=1, batch_size=5):
+        super(GeneratorThread, self).__init__()
+        self.fn_data = fn_data
+        self.delay = delay
+        self.formater = formater
+        self.batch_size = batch_size
 
     def stop(self):
         self._stop_t = True
@@ -76,22 +107,22 @@ class SenderThread(threading.Thread):
         while self._stop_t == False:
             counter += 1
             time.sleep(self.delay)
-            timestamps.append(next(self.data))
-            if counter % CHUNK_SIZE == 0:
-                print("sending data from thread")
-                timestamps.append('')
-                self.client.send_data('\r\n\r\n'.join(timestamps))
-                timestamps = []
+            global_l.extend(list(self.formater.encode(self.fn_data())))
+            print("generate data from thread, len: {}".format(len(global_l)))
 
 
 class SyncData(object):
-    def __init__(self, name, carbon_server, carbon_port=2003, delay=3, 
-                delay_error_sensor=0.2, delay_error_connection=2):
+    def __init__(self, name, server, port=8080, delay=3, 
+                delay_error_sensor=0.2, delay_error_connection=2, formater=None,
+                batch_size=5):
         self.name = name
         self.delay = delay
-        self.CARBON_SERVER = carbon_server
-        self.CARBON_PORT = carbon_port
+        self.server = server
+        self.port = port
         self.logger = self.logging_setup()
+        self.formater = formater
+        self.delay_error_connection = delay_error_connection
+        self.batch_size = batch_size
 
     def logging_setup(self):
         formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
@@ -102,28 +133,33 @@ class SyncData(object):
         logger.setLevel(logging.INFO)
         return logger
 
-    def run(self, generator):
-        data = generator()
+    def run(self, fn_data):
+        self.t = GeneratorThread(fn_data, self.formater, 
+                                delay=self.delay, batch_size=self.batch_size)
+        self.t.start()
         while True:
-            client = Client(self.CARBON_SERVER, self.CARBON_PORT, 
-                            name=self.name, delay=self.delay, data=data)
+            client = Client(self.server, port=self.port, name=self.name, 
+                            delay=self.delay, formater=self.formater,
+                            batch_size=self.batch_size)
             asyncore.loop(timeout=1)
+            time.sleep(self.delay_error_connection)
+        self.t.stop()
 
 
-class SyncDataFromDisk(SyncData):
-    def slow(self, messages):
-        for message in messages:
-            time.sleep(.5)
-            yield message
+#class SyncDataFromDisk(SyncData):
+#    def slow(self, messages):
+#        for message in messages:
+#            time.sleep(.5)
+#            yield message
 
-    def run(self):
-        while True:
-            queue = FifoDiskQueue("{}.fifo.sql".format(self.name))
-            self.logger.info("Data saved: {}".format(len(queue)))
-            if len(queue) > 0:
-                messages = queue.pull()
-                client = Client(self.CARBON_SERVER, self.CARBON_PORT, 
-                            name=self.name, delay=self.delay, data=data)
-                asyncore.loop(timeout=1)
-            queue.close()
-            time.sleep(3)
+#    def run(self):
+#        while True:
+#            queue = FifoDiskQueue("{}.fifo.sql".format(self.name))
+#            self.logger.info("Data saved: {}".format(len(queue)))
+#            if len(queue) > 0:
+#                messages = queue.pull()
+#                client = Client(self.server, self.port, 
+#                            name=self.name, delay=self.delay, data=data)
+#                asyncore.loop(timeout=1)
+#            queue.close()
+#            time.sleep(3)
