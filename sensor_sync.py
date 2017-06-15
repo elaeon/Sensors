@@ -46,9 +46,16 @@ class Client(asyncore.dispatcher):
         self.buffer = self.buffer[sent:]
 
     def send_data(self, data):
-        ndata = list(data)
-        ndata.append('')
-        self.buffer = bytes('\r\n\r\n'.join(ndata), 'ascii')
+        data_bytes = bytes('', 'ascii')
+        data_string = []
+        for elem in data:
+            if isinstance(elem, str):
+                data_string.append(elem)
+            elif isinstance(elem, bytes):
+                data_bytes = data_bytes + elem
+        
+        data_string.append('')
+        self.buffer = bytes('\r\n\r\n'.join(data_string), 'ascii') + data_bytes
 
     @classmethod
     def cls_name(cls):
@@ -79,12 +86,20 @@ class SenderThread(threading.Thread):
                 self.client.send_data(global_l[:self.batch_size])
                 global_l = global_l[self.batch_size:]
 
-            if len(global_l) > 2*self.batch_size:
+            if len(global_l) > 3*self.batch_size:
                 fq = FifoDiskQueue("{}.fifo.sql".format(self.client.name))
-                for obj in global_l[:self.batch_size*2]:
+                for obj in global_l[:self.batch_size*3]:
                     print("SAVED: {}".format(obj))
                     fq.push(obj)
-                global_l = global_l[self.batch_size*2:]
+                global_l = global_l[self.batch_size*3:]
+                fq.close()
+
+            if 0 < len(global_l) < 3*self.batch_size:
+                fq = FifoDiskQueue("{}.fifo.sql".format(self.client.name))
+                #print("PULL")
+                for elem in fq.pull():
+                    global_l.append(elem)
+                print("DB SIZE", len(fq))
                 fq.close()
 
 
@@ -102,10 +117,7 @@ class GeneratorThread(threading.Thread):
         self._stop_t = True
 
     def run(self):
-        counter = 0
-        timestamps = []
         while self._stop_t == False:
-            counter += 1
             time.sleep(self.delay)
             global_l.extend(list(self.formater.encode(self.fn_data())))
             print("generate data from thread, len: {}".format(len(global_l)))

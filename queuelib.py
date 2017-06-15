@@ -71,7 +71,11 @@ class FifoDiskQueue(object):
         return self._connection_cache[id]
 
     def push(self, obj):
-        obj_buffer = bytes(obj, 'ascii')
+        if not isinstance(obj, bytes):
+            obj_buffer = bytes(obj, 'ascii')
+        else:
+            obj_buffer = obj
+
         with self._get_conn() as conn:
             conn.execute(self._push, (obj_buffer,)) 
 
@@ -85,7 +89,7 @@ class FifoDiskQueue(object):
                 conn.execute(self._write_lock)
                 cursor = conn.execute(self._pull)
                 try:
-                    id, obj_buffer = cursor.next()
+                    id, obj_buffer = next(cursor)
                     yield obj_buffer
                     conn.execute(self._del, (id,))
                     keep_pooling = False
