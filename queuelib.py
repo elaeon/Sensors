@@ -1,5 +1,8 @@
 import os
 import sqlite3
+from time import sleep
+from threading import get_ident
+
 
 class FifoMemoryQueue(object):
     def __init__(self):
@@ -22,55 +25,97 @@ class FifoMemoryQueue(object):
     def __len__(self):
         return len(self._db)
 
+    
 class FifoDiskQueue(object):
+
     _create = (
-        'CREATE TABLE IF NOT EXISTS fifoqueue '
-        '(id INTEGER PRIMARY KEY AUTOINCREMENT, item BLOB)'
-    )
+            'CREATE TABLE IF NOT EXISTS fifoqueue ' 
+            '('
+            '  id INTEGER PRIMARY KEY AUTOINCREMENT,'
+            '  item BLOB'
+            ')'
+            )
     _size = 'SELECT COUNT(*) FROM fifoqueue'
+    _iterate = 'SELECT id, item FROM queue'
     _push = 'INSERT INTO fifoqueue (item) VALUES (?)'
-    _pop = 'SELECT id, item FROM fifoqueue ORDER BY id LIMIT 1'
-    _pull = 'SELECT id, item FROM fifoqueue ORDER BY id LIMIT 10'
+    _write_lock = 'BEGIN IMMEDIATE'
+    _pull = 'SELECT id, item FROM fifoqueue ORDER BY id LIMIT 1'
     _del = 'DELETE FROM fifoqueue WHERE id = ?'
+    _peek = (
+            'SELECT item FROM queue '
+            'ORDER BY id LIMIT 1'
+            )
 
     def __init__(self, path):
-        self._path = os.path.abspath(path)
-        self._db = sqlite3.Connection(self._path)
-        self._db.text_factory = bytes
-        with self._db as conn:
+        self.path = os.path.abspath(path)
+        self._connection_cache = {}
+        with self._get_conn() as conn:
             conn.execute(self._create)
 
-    def push(self, item):
-        # fix this, it don't work in python3
-        if not isinstance(item, bytes):
-            raise TypeError('Unsupported type: {}'.format(type(item).__name__))
+    def __len__(self):
+        with self._get_conn() as conn:
+            l = next(conn.execute(self._size))[0]
+        return l
 
-        with self._db as conn:
-            conn.execute(self._push, (item,))
+    def __iter__(self):
+        with self._get_conn() as conn:
+            for id, obj_buffer in conn.execute(self._iterate):
+                yield loads(str(obj_buffer))
 
-    def pop(self):
-        with self._db as conn:
-            for id_, item in conn.execute(self._pop):
-                conn.execute(self._del, (id_,))
-                return item
+    def _get_conn(self):
+        id = get_ident()
+        if id not in self._connection_cache:
+            self._connection_cache[id] = sqlite3.Connection(self.path, 
+                    timeout=60)
+            self._connection_cache[id].text_factory = bytes
+        return self._connection_cache[id]
 
-    def pull(self):
-        with self._db as conn:
-            items = list(conn.execute(self._pull))
-            for id_, _ in items:
-                conn.execute(self._del, (id_,))
-            return [item for _, item in items]
+    def push(self, obj):
+        if not isinstance(obj, bytes):
+            obj_buffer = bytes(obj, 'ascii')
+        else:
+            obj_buffer = obj
+
+        with self._get_conn() as conn:
+            conn.execute(self._push, (obj_buffer,)) 
+
+    def pull(self, sleep_wait=True):
+        keep_pooling = True
+        wait = 0.1
+        max_wait = 2
+        tries = 0
+        with self._get_conn() as conn:
+            while keep_pooling:
+                conn.execute(self._write_lock)
+                cursor = conn.execute(self._pull)
+                try:
+                    id, obj_buffer = next(cursor)
+                    yield obj_buffer
+                    conn.execute(self._del, (id,))
+                    keep_pooling = False
+                except StopIteration:
+                    conn.commit() # unlock the database
+                    if not sleep_wait:
+                        keep_pooling = False
+                        continue
+                    tries += 1
+                    sleep(wait)
+                    wait = min(max_wait, tries/10 + wait)
+
+    def peek(self):
+        with self._get_conn() as conn:
+            cursor = conn.execute(self._peek)
+            try:
+                return loads(str(cursor.next()[0]))
+            except StopIteration:
+                return None
 
     def close(self):
-        #if len(self) == 0:
-        #    os.remove(self._path)
-        self._db.close()
+        for k in self._connection_cache.keys():
+            self._connection_cache[k].close()
+        self._connection_cache = {}
 
-    def __len__(self):
-        with self._db as conn:
-            return next(conn.execute(self._size))[0]
-
-
+    
 class LifoDiskQueue(FifoDiskQueue):
     _create = (
         'CREATE TABLE IF NOT EXISTS lifoqueue '

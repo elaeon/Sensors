@@ -1,17 +1,19 @@
-#!/usr/bin/python2.7
+#!/usr/bin/python3
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from sensor_sync import SyncDataFromMemory
+from sensor_sync import SyncData
+from formater import CarbonFormat
 
 
 def random_data_tuple():
     import random
-    return random.randint(0, 100), random.uniform(0, 30)
+    return random.randint(0, 100)#, random.uniform(0, 30)
 
 
 if __name__ == '__main__':
-    sensor_sync = SyncDataFromMemory("temperature", "127.0.0.1")
-    sensor_sync.run(random_data_tuple, batch_size=10, gen_data_every=2)
-
+    formater = CarbonFormat("temperature", alternate_names=("humidity_A", "temperature_A"))
+    sensor_sync = SyncData("temperature", "127.0.0.1", formater=formater, delay=1, 
+                            batch_size=10, delay_error_connection=10)
+    sensor_sync.run(random_data_tuple)
