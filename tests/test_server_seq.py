@@ -4,13 +4,28 @@ import socket
 import time
 import random
 
+numbers = []
+error = False
+
+def test():
+    global numbers
+    global error
+    numbers = sorted(map(int, (e for e in numbers if e != '')))
+    for n0, n1 in zip(numbers, numbers[1:]):
+        if abs(n0 - n1) > 1:
+            print(numbers)
+            print("ERROR LOST NUMBER", n0, n1)
+            error = True
+        elif error is False:
+            numbers = []
 
 class EchoHandler(asyncore.dispatcher_with_send):
 
     def handle_read(self):
         data = self.recv(8192)
         print(data)
-        #self.send(data)
+        numbers.extend(data.split('\r\n\r\n'))
+        test()
 
 
 class EchoServer(asyncore.dispatcher):

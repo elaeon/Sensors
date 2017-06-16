@@ -13,6 +13,9 @@ class BaseFormat(object):
     def msg_format(self, message):
         pass
 
+    def encode(self, value):
+        pass
+
     def run(self, fn, sleep=1):
         pass
 
@@ -37,20 +40,12 @@ class CarbonFormat(BaseFormat):
         return self.msg_format(self.message_fn(value))
 
 
-#class WriterDiskData(WriterData):
-#    def __init__(self, sensor_name, node=platform.node().replace('.', '-')):
-#        super(WriterDiskData, self).__init__(sensor_name, node=node)
-#        self.database_name = "{}.fifo.sql".format(self.sensor_name)
+class SequenceTestFormat(BaseFormat):
+    def msg_format(self, messages):
+        for msg in messages:
+            v, timestamp, name = msg
+            yield str(v)
 
-#    def run(self, fn, sleep=1):
-#        while True:
-#            queue = FifoDiskQueue(self.database_name)
-#            for message in self.generate_data(fn, sleep=sleep):
-#                queue.push(message)
-#            queue.close()
+    def encode(self, value):
+        return self.msg_format(self.message_fn(value))
 
-#    def save(self, messages):
-#       queue = FifoDiskQueue(self.database_name)
-#        for message in messages:
-#            queue.push(message)
-#        queue.close()

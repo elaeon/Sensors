@@ -17,4 +17,3 @@ if __name__ == '__main__':
     sensor_sync = SyncData("temperature", "127.0.0.1", formater=formater, delay=1, 
                             batch_size=10, delay_error_connection=10)
     sensor_sync.run(random_data_tuple)
-
