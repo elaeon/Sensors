@@ -1,7 +1,7 @@
 from fabric.api import run, local, env, cd, put, sudo, reboot
 
 # una forma en que se puede correr este comando es 
-#(raspberry-env) ramiro@homer:~/Documentos/raspbpi/sensors/buider$ fab -f build.py test_sensors -H 192.168.52.114 --port 1013
+#(raspberry-env) ramiro@homer:~/Documentos/raspbpi/sensors/buider$ fab -f build.py <funcion> -H 192.168.52.114 --port 1013 #puerto del ssh
 
 env.user = "pi"
 
@@ -54,7 +54,7 @@ def modprobes_enable():
 def nombre_sensor():
     command_1 = "ls /sys/bus/w1/devices"
     resultado = run(command_1)
-    print resultado.split(" ")[0]
+    print(resultado.split(" ")[0])
 
 def install_bibliotecas_humedad():
     sudo("apt-get install build-essential python-dev")

@@ -15,9 +15,9 @@ def check_network(host, port):
 
 
 def get_settings(base_path, directory=None):
-    import ConfigParser
+    import configparser
     import os
-    config = ConfigParser.ConfigParser()
+    config = configparser.ConfigParser()
     if directory is None:
         settings_path = os.path.join(os.path.dirname(os.path.abspath(base_path)), "settings.cfg")
     else:

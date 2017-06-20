@@ -1,4 +1,4 @@
-#!/usr/bin/python2.7
+#!/usr/bin/python3
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -9,7 +9,7 @@ from utils import get_settings, two_point_calibration
 
 settings = get_settings(__file__)
 CARBON_HOST = settings.get("server", "carbon_server")
-CARBON_PORT = settings.get("server", "carbon_port")
+CARBON_PORT = int(settings.get("server", "carbon_port"))
 SENSOR_NAME = "temperature_humidity"
 DEVICE_NUMBER = settings.get("sensor_termopar", "device_number")
 GPIO = '22'
