@@ -3,11 +3,13 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from sensor_sync import SyncDataFromMemory
+from sensor_sync import SyncData
+from formater import CarbonFormat
 from utils import get_settings, two_point_calibration
 
 settings = get_settings(__file__)
 CARBON_HOST = settings.get("server", "carbon_server")
+CARBON_PORT = settings.get("server", "carbon_port")
 SENSOR_NAME = "temperature_humidity"
 DEVICE_NUMBER = settings.get("sensor_termopar", "device_number")
 GPIO = '22'
@@ -35,5 +37,7 @@ def get_humidity_temperature():
     return humidity, temperature
 
 if __name__ == '__main__':
-    sensor_sync = SyncDataFromMemory(SENSOR_NAME, CARBON_HOST)
-    sensor_sync.run(get_humidity_temperature, batch_size=10, gen_data_every=2)
+    formater = CarbonFormat(SENSOR_NAME, alternate_names=("humidity_A", "temperature_A"))
+    sensor_sync = SyncData(SENSOR_NAME, CARBON_HOST, port=CARBON_PORT, formater=formater, delay=2, 
+                            batch_size=10, delay_error_connection=10)
+    sensor_sync.run(get_humidity_temperature)

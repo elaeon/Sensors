@@ -6,11 +6,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import RPi.GPIO as io
 io.setmode(io.BCM)
 
-from sensor_sync import SyncDataFromMemory
+from sensor_sync import SyncData
+from formater import CarbonFormat
 from utils import get_settings
 
 settings = get_settings(__file__)
 CARBON_HOST = settings.get("server", "carbon_server")
+CARBON_PORT = settings.get("server", "carbon_port")
 SENSOR_NAME = "puerta"
 
 door_pin = 17 #GPIO17. osea pin11
@@ -21,5 +23,7 @@ def check_door():
 
 
 if __name__ == '__main__':
-    sensor_sync = SyncDataFromMemory(SENSOR_NAME, CARBON_HOST)
-    sensor_sync.run(check_door, batch_size=10, gen_data_every=2)
+    formater = CarbonFormat(SENSOR_NAME)
+    sensor_sync = SyncData(SENSOR_NAME, CARBON_HOST, port=CARBON_PORT, formater=formater, delay=2, 
+                            batch_size=10, delay_error_connection=10)
+    sensor_sync.run(check_door)
