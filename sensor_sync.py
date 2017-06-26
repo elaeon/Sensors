@@ -10,33 +10,49 @@ global_l = []
 class Client(asyncore.dispatcher):
 
     def __init__(self, host, port=8080, name="client_data", delay=1,
-                formater=None, batch_size=5):
+                formater=None, batch_size=5, delay_error_connection=5):
         asyncore.dispatcher.__init__(self)
-        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.connect((host, port))
-        self.buffer = ""
+        self.buffer = bytes("", 'ascii')
         self.name = name
         self.delay = delay
+        self.host = host
+        self.port = port
+        self.batch_size = batch_size
         self.formater = formater
+        self.connection_error = True
+        self.delay_error_connection = delay_error_connection 
 
-        print("NEW")
-        self.t_net = SenderThread(self, self.formater, 
-                            delay=self.delay, batch_size=batch_size)
-        self.t_net.start()
+        self.init_connection()
+
+    def init_connection(self):
+        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+        while True:
+            try:
+                self.connect((self.host, self.port))
+            except socket.error as e:
+                self.connection_error = True
+                print("ERROR", e)
+                time.sleep(self.delay_error_connection)
+            else:
+                self.connection_error = False
+                break
 
     def handle_connect(self):
-        print("conected")
+        print("Cheking conection")
 
     def handle_close(self):
-        print("closed")
+        print("Connection closed")
         self.close()
-        self.t_net.stop()
 
     def handle_read(self):
-        print(self.recv(8192))
+        data = self.recv(8192)
+        print("RESPONSE", data)
 
-    def handle_error(self):
-        print("lost")
+    def readable(self):
+        return True
+
+    #def handle_error(self):
+    #    print("Handle Error")
 
     def writable(self):
         return (len(self.buffer) > 0)
@@ -44,6 +60,8 @@ class Client(asyncore.dispatcher):
     def handle_write(self):
         sent = self.send(self.buffer)
         self.buffer = self.buffer[sent:]
+        self.handle_close()
+        self.init_connection()
 
     def send_data(self, data):
         data_bytes = bytes('', 'ascii')
@@ -55,7 +73,7 @@ class Client(asyncore.dispatcher):
                 data_bytes = data_bytes + bytes('\r\n\r\n', 'ascii') + elem
         
         data_string.append('')
-        self.buffer = bytes('\r\n\r\n'.join(data_string), 'ascii') + data_bytes
+        self.buffer += bytes('\r\n\r\n'.join(data_string), 'ascii') + data_bytes
 
     @classmethod
     def cls_name(cls):
@@ -81,8 +99,8 @@ class SenderThread(threading.Thread):
         while self._stop_t == False:
             counter += 1
             time.sleep(round(self.delay - (self.delay/4.), 2))
-            if counter % self.batch_size == 0:
-                print("sending data from thread {}".format(self.client.cls_name()))
+            if counter % self.batch_size == 0 and self.client.connection_error is False:
+                print("sending data from thread {}:{}".format(self.client.cls_name(), id(self.client)))
                 self.client.send_data(global_l[:self.batch_size])
                 global_l = global_l[self.batch_size:]
                 counter = 0
@@ -152,11 +170,15 @@ class SyncData(object):
         self.t = GeneratorThread(fn_data, self.formater, 
                                 delay=self.delay, batch_size=self.batch_size)
         self.t.start()
-        while True:
-            client = Client(self.server, port=self.port, name=self.name, 
-                            delay=self.delay, formater=self.formater,
-                            batch_size=self.batch_size)
-            asyncore.loop(timeout=1)
-            time.sleep(self.delay_error_connection)
+        client = Client(self.server, port=self.port, name=self.name, 
+                       delay=self.delay, formater=self.formater,
+                       batch_size=self.batch_size, 
+                       delay_error_connection=5)
+        print("Init sender")        
+        t_net = SenderThread(client, self.formater, 
+            delay=self.delay, batch_size=self.batch_size)
+        t_net.start()
+        asyncore.loop(timeout=1, use_poll=True)
         self.t.stop()
+        client.t_net.stop()
 
