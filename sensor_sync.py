@@ -21,7 +21,6 @@ class Client(asyncore.dispatcher):
         self.formater = formater
         self.connection_error = True
         self.delay_error_connection = delay_error_connection 
-
         self.init_connection()
 
     def init_connection(self):
@@ -38,7 +37,7 @@ class Client(asyncore.dispatcher):
                 break
 
     def handle_connect(self):
-        print("Cheking conection")
+        print("Checking conection")
 
     def handle_close(self):
         print("Connection closed")
@@ -46,13 +45,18 @@ class Client(asyncore.dispatcher):
 
     def handle_read(self):
         data = self.recv(8192)
+        if len(data) == 0:
+            self.handle_error()
         print("RESPONSE", data)
 
     def readable(self):
         return True
 
-    #def handle_error(self):
-    #    print("Handle Error")
+    def handle_error(self):
+        self.connection_error = True
+        time.sleep(self.delay_error_connection)
+        self.handle_close()
+        self.init_connection()
 
     def writable(self):
         return (len(self.buffer) > 0)
@@ -60,8 +64,7 @@ class Client(asyncore.dispatcher):
     def handle_write(self):
         sent = self.send(self.buffer)
         self.buffer = self.buffer[sent:]
-        self.handle_close()
-        self.init_connection()
+        self.handle_error()
 
     def send_data(self, data):
         data_bytes = bytes('', 'ascii')
@@ -83,12 +86,10 @@ class Client(asyncore.dispatcher):
 class SenderThread(threading.Thread):
     _stop_t = False
 
-    def __init__(self, client, formater, delay=1, batch_size=5):
+    def __init__(self, client, formater):
         super(SenderThread, self).__init__()
         self.client = client
-        self.delay = delay
         self.formater = formater
-        self.batch_size = batch_size
 
     def stop(self):
         self._stop_t = True
@@ -98,22 +99,22 @@ class SenderThread(threading.Thread):
         counter = 0
         while self._stop_t == False:
             counter += 1
-            time.sleep(round(self.delay - (self.delay/4.), 2))
-            if counter % self.batch_size == 0 and self.client.connection_error is False:
+            time.sleep(round(self.client.delay - (self.client.delay/4.), 2))
+            if counter % self.client.batch_size == 0 and self.client.connection_error is False:
                 print("sending data from thread {}:{}".format(self.client.cls_name(), id(self.client)))
-                self.client.send_data(global_l[:self.batch_size])
-                global_l = global_l[self.batch_size:]
+                self.client.send_data(global_l[:self.client.batch_size])
+                global_l = global_l[self.client.batch_size:]
                 counter = 0
 
-            if len(global_l) > 4*self.batch_size:
+            if len(global_l) > 4*self.client.batch_size:
                 fq = FifoDiskQueue("{}.fifo.sql".format(self.client.name))
-                for obj in global_l[:self.batch_size*2]:
+                for obj in global_l[:self.client.batch_size*2]:
                     print("SAVED: {}".format(obj))
                     fq.push(obj)
-                global_l = global_l[self.batch_size*2:]
+                global_l = global_l[self.client.batch_size*2:]
                 fq.close()
 
-            if (counter + 2) % self.batch_size == 0:
+            if (counter + 2) % self.client.batch_size == 0:
                 fq = FifoDiskQueue("{}.fifo.sql".format(self.client.name))
                 if len(fq) > 0:
                     for i in range(2):
@@ -175,10 +176,9 @@ class SyncData(object):
                        batch_size=self.batch_size, 
                        delay_error_connection=5)
         print("Init sender")        
-        t_net = SenderThread(client, self.formater, 
-            delay=self.delay, batch_size=self.batch_size)
+        t_net = SenderThread(client, self.formater)
         t_net.start()
         asyncore.loop(timeout=1, use_poll=True)
+        print("STOP ALL")
         self.t.stop()
-        client.t_net.stop()
-
+        t_net.stop()
