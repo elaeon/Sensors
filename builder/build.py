@@ -37,6 +37,8 @@ def envio_configtxt():
 def install_sensors():
     with cd('/var/'):
         run("sudo git clone https://github.com/elaeon/sensors.git")
+
+def setup_settings():
     local("cp settings.cfg /tmp/settings.cfg")
     put("/tmp/settings.cfg", "/var/sensors/examples/settings.cfg", use_sudo=True)
     run("sudo chown -R pi:pi /var/sensors/")
@@ -80,26 +82,34 @@ def install_termopar_paso_1():
 def install_termopar_paso_2():
     nombre_sensor()
 
-#paso_2___1:   se copia en la carpeta cp examples/settings.example.cfg  examples/settings.cfg  # el settings.cfg debe estar dentro de la carpeta buider, cuando se corre: fab -f build.py test_sensors -H 192.168.52.114 --port 1013  
-#paso 2___2:   se modifica el settings.cfg y se pone el nombre del sensor que salio de el paso_2
-
 
 def create_permissions_loggers():
     run("touch /tmp/puerta.log")
     run("touch /tmp/temperature_low_one.log")
     run("chown pi:pi /tmp/*.log")
-    
-def install():
+
+
+def paso_1_install():
     install_git()
     install_supervisor()
     install_sensors()
-    install_bibliotecas_humedad()
-    supervisor_conf()    
+    supervisor_conf()
     change_sensors_file_mod()
     config_hostname()
     create_permissions_loggers()
     reboot(wait=5)
 
+def paso_2_install_termopar():
+    install_termopar_paso_1()
+
+def paso_2_install_humedad():
+    install_bibliotecas_humedad()
+
+#paso_3___1:   se copia en la carpeta cp examples/settings.example.cfg  examples/settings.cfg  # el settings.cfg debe estar dentro de la carpeta buider, se modifica el settings.cfg y se pone el nombre del sensor que salio del paso anterior
+def paso_3_install()
+    setup_settings()
+    adiciona_wifi_visitas()
+    configura_monitor_peque()
 
 #paso 4__1 raspiconnfig se modifica el timezone y la internacionalizacion
 

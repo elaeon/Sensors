@@ -10,7 +10,7 @@ import os
 
 settings = get_settings(__file__)
 CARBON_HOST = settings.get("server", "carbon_server")
-CARBON_PORT = settings.get("server", "carbon_port")
+CARBON_PORT = int(settings.get("server", "carbon_port"))
 SENSOR_NAME = "temperature_low_one"
 DEVICE_NUMBER = settings.get("sensor_termopar", "device_number")
 
