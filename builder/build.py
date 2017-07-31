@@ -106,7 +106,7 @@ def paso_2_install_humedad():
     install_bibliotecas_humedad()
 
 #paso_3___1:   se copia en la carpeta cp examples/settings.example.cfg  examples/settings.cfg  # el settings.cfg debe estar dentro de la carpeta buider, se modifica el settings.cfg y se pone el nombre del sensor que salio del paso anterior
-def paso_3_install()
+def paso_3_install():
     setup_settings()
     adiciona_wifi_visitas()
     configura_monitor_peque()
