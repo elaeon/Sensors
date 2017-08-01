@@ -5,7 +5,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from sensor_sync import SyncData
 from formater import CarbonFormat
-from utils import get_settings
+from utils import get_settings, two_point_calibration
 import os
 
 settings = get_settings(__file__)
@@ -21,21 +21,27 @@ base_dir = '/sys/bus/w1/devices/'
 device_folder = base_dir + DEVICE_NUMBER
 device_file = device_folder + '/w1_slave'
 
+raw_low_t = float(settings.get("two_point_calibration_1", "raw_low"))
+raw_high_t = float(settings.get("two_point_calibration_1", "raw_high"))
+ref_low_t = float(settings.get("two_point_calibration_1", "ref_low")) 
+ref_high_t = float(settings.get("two_point_calibration_1", "ref_high"))
+
 def read_temp_raw():
     with open(device_file,'r') as f:
         lines = f.readlines()
     return lines
 
 def read_temp():
-   lines = read_temp_raw()
-   while lines[0].strip()[-3:] != 'YES':
-      time.sleep(0.2)
-      lines = read_temp_raw()
-   equals_pos = lines[1].find('t=')
-   if equals_pos != -1:
-      temp_string = lines[1][equals_pos+2:]
-      temp_c = float(temp_string) / 1000.0
-      return temp_c
+    lines = read_temp_raw()
+    while lines[0].strip()[-3:] != 'YES':
+        time.sleep(0.2)
+        lines = read_temp_raw()
+    equals_pos = lines[1].find('t=')
+    if equals_pos != -1:
+        temp_string = lines[1][equals_pos+2:]
+        temp_c = float(temp_string) / 1000.0
+        temp_c = two_point_calibration(temp_c, raw_low_t, raw_high_t, ref_low_t, ref_high_t)
+        return temp_c
 
 
 if __name__ == '__main__':
