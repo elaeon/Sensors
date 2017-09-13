@@ -1,5 +1,5 @@
 # sensors
-Sensors, is a library for send datatime series from a device to a server over the network or saved them into the device.
+Sensors, is a library to send datatime series from a device to a server over the network or saved them into the device.
 
 Example.
 First define a function where the data is generated.
